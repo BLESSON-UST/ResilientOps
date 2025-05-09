@@ -1,0 +1,314 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+.myCustomClass {
+  font-size: 100px;
+}
+
+.subpagMT {
+  margin-top: 0px;
+}
+
+.cardStyle {
+  height: 275px !important;
+  background-color: #f7f7f1 !important;
+  border-radius: 0px !important;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+}
+
+.cardContentHt {
+  height: 200px;
+}
+
+.loginbg{
+  background-color: #f7f7f1 !important;
+  border-radius: 0px !important;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.2);
+}
+
+.cardContentHt h2 {
+  text-transform: capitalize;
+}
+
+.homecardStyle {
+  height: 175px !important;
+  background-color: #f7f7f1 !important;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+}
+
+.homeContentHt {
+  height: 100px;
+}
+
+.homeTypoBox {
+  color: #000;
+}
+
+.mainHeader {
+  height: "122px";
+  padding-top: 10px;
+  background: #FFF;
+  box-shadow: 0px 4px 4px 0px rgba(0, 0, 0, 0.25);
+
+}
+
+.menubar {
+  height: 60px;
+  background: #1B2228;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.links {
+  color: #FFF !important;
+  text-decoration: none !important;
+  margin-left: 0px !important;
+  text-transform: capitalize !important;
+}
+
+.links:hover {
+  color: #006E74 !important
+}
+
+.links:after {
+  content: '|';
+  padding: 0 1rem;
+}
+
+.links:last-child:after {
+  content: '';
+}
+
+.sublinks {
+  color: #000 !important;
+  text-decoration: none !important;
+  margin-right: 20px;
+}
+
+.sublinks:hover {
+  color: #006E74 !important
+}
+
+.deploymentlinks {
+  color: #FFF !important;
+  text-decoration: none !important;
+  margin-left: 0px !important;
+  text-transform: capitalize !important;
+}
+
+.deploymentlinks:hover {
+  color: #006E74 !important
+}
+
+
+.subpageBg {
+  background: #F7F7F1;
+  padding: 20px 0px;
+  min-height: 320px;
+}
+
+.inputTxtShadow {
+  padding: 10px;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+  background-color: #FFF;
+}
+
+.fontBold {
+  font-weight: bold !important;
+}
+
+.subButton {
+  text-transform: capitalize !important;
+  border-color: #FFF !important;
+  border-radius: 0px !important;
+  background-color: #006e74 !important;
+  color: #FFF !important;
+}
+
+.subButton:hover {
+  background-color: #01484c !important;
+  color: #FFF !important;
+}
+
+.recognitionBtn {
+  text-transform: capitalize !important;
+  border-color: #FFF !important;
+  border-radius: 0px !important;
+  color: #FFF !important;
+}
+
+.loginButton {
+  text-transform: capitalize !important;
+  border-color: #FFF !important;
+  border-radius: 0px !important;
+  background-color: #1B2228 !important;
+  color: #FFF !important;
+}
+
+.loginButton:hover {
+  background-color: #01484c !important;
+  color: #FFF !important;
+}
+
+.btnMt {
+  margin-top: 20px !important;
+}
+
+.marginBt {
+  margin-bottom: 20px;
+}
+
+.marginLt {
+  margin-left: 20px;
+}
+
+.marginRt {
+  margin-right: 20px !important;
+}
+
+.selectStyle {
+  width: 200px;
+  height: 40px;
+  background-color: #FFF;
+}
+
+.marginTp {
+  margin-Top: 20px !important;
+}
+
+.displayinblock {
+  display: inline-block;
+}
+
+.footerbg {
+  height: 60px;
+  background: #1B2228;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.Needhelpbg {
+  height: 60px;
+  background: #003c51;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.textareabg {
+  border: none;
+  height: 200px;
+  width: 100%;
+  outline: none;
+}
+
+.displayFlex {
+  display: flex;
+}
+
+.progressMargin {
+  margin-left: 20px;
+  margin-top: 15px;
+}
+
+.generateTxt {
+  margin-top: 20px;
+  text-align: justify;
+}
+
+.subHeading {
+  background-color: #f7f7f1;
+  border-left: 10px solid #1B2228;
+  padding: 10px;
+}
+
+.marginBt0 {
+  margin-bottom: 0px !important;
+}
+
+.trynowBtn {
+  margin-top: 0px !important;
+  border-color: #000 !important;
+  color: #000 !important;
+  border-radius: 0px !important;
+  text-transform: capitalize !important;
+}
+
+.trynowBtn:hover {
+  background-color: #006E74 !important;
+  color: #FFF !important
+}
+
+.hometrynowBtn {
+  margin-top: 0px !important;
+  border-color: #000 !important;
+  color: #000 !important;
+  border-radius: 0px !important;
+  text-transform: capitalize !important;
+}
+
+.hometrynowBtn:hover {
+  color: #000 !important
+}
+
+.textJustify {
+  text-align: justify;
+}
+
+.configSelect {
+  margin-left: 10px;
+  height: 30px;
+  min-width: 120px;
+}
+
+.loginContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.footerlinks {
+  color: #FFF !important;
+  text-decoration: none !important;
+  margin-left: 0px !important;
+  text-transform: capitalize !important;
+}
+
+.footerlinks:hover {
+  color: #006E74 !important
+}
+
+.pageminHeight {
+  min-height: 320px;
+}
+
+.flexend {
+  justify-content: flex-end; 
+}
+
+.roleLink {
+  color: #006E74 !important;
+  text-decoration: none !important;
+  margin-right: 20px;
+}
+
+.roleLink:hover {
+  color: #000 !important
+}
+.roleLink:active {
+  color: #006E74 !important
+}

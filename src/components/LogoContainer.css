@@ -1,0 +1,21 @@
+.logo-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 20px 0 0 20px; /* top and left spacing */
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 999; /* ensure it stays on top */
+}
+.logo {
+  width: 30px;
+  height: auto;
+  margin-right: 10px;
+}
+
+.logo-text {
+  font-weight: bold;
+  color: #333;
+  font-size: 1.25rem;
+}

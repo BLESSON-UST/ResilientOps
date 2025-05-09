@@ -1,0 +1,189 @@
+{
+    "sampleScreen1": {
+      "processName": "Adjudicate Claims and Process Reimbursement",
+      "businessCapability": "Deliver Services",
+      "description": "The goal of the process is to manage insurance claims from submission to resolution, ensuring accurate data handling, eligibility determination, and compliance through adjudication. It aims to facilitate timely reimbursement, notify stakeholders, and properly manage liability, all while maintaining adherence to policies and regulatory guidelines."
+    },
+    "sampleScreen2": [
+      {
+        "id": "1",
+        "step": 1,
+        "description": "Process intake of claims: Claims are received from healthcare providers, insurers, or policyholders and recorded accurately to ensure all required information is properly captured and formatted."
+      },
+      {
+        "id": "2",
+        "step": 2,
+        "description": "Develop claim/encounter informatics: Claims and patient encounter data are structured, validated, and prepared for analysis, ensuring accuracy and consistency before further processing."
+      },
+      {
+        "id": "3",
+        "step": 3,
+        "description": "Perform claim policy management: Relevant policies, regulations, and contract terms are applied to determine eligibility, coverage, and compliance with healthcare or insurance guidelines."
+      },
+      {
+        "id": "4",
+        "step": 4,
+        "description": "Adjudicate claims: Claims are reviewed and verified based on policy rules and medical necessity, resulting in decisions on approval, denial, or further investigation."
+      },
+      {
+        "id": "5",
+        "step": 5,
+        "description": "Perform benefits management: Benefits associated with the claim, including co-pays, deductibles, and coverage limits, are evaluated to ensure alignment with the insured individual's coverage."
+      },
+      {
+        "id": "6",
+        "step": 6,
+        "description": "Prepare and process claims: Claims are finalized by applying necessary adjustments or corrections, preparing them for payment or rejection."
+      },
+      {
+        "id": "7",
+        "step": 7,
+        "description": "Process reimbursement and notification: Payments are issued to providers or policyholders, and claim status, payment details, or denial reasons are communicated to relevant parties."
+      },
+      {
+        "id": "8",
+        "step": 8,
+        "description": "Communicate claim outcomes: Stakeholders (patients, providers, insurers) are informed of claim results, provided with explanations of benefits (EOBs), and instructed on the next steps."
+      },
+      {
+        "id": "9",
+        "step": 9,
+        "description": "Manage other party liabilities: Coordination of benefits (COB) ensures that other responsible parties, such as secondary insurers or third-party payers, fulfill their payment obligations when applicable."
+      }
+    ],
+    "sampleScreen3": [
+      {
+        "pathType": "Happy",
+        "suppliers": "Providers, Policyholders, Clearinghouses",
+        "inputs": "Claim Form, Member Information, Provider Details",
+        "id": "1",
+        "processStep": "Receive claim submissions",
+        "outputs": "Claim Logged in System",
+        "customers": "Providers, Policyholders"
+      },
+      {
+        "pathType": "Exception",
+        "suppliers": "Providers, Policyholders",
+        "inputs": "Claim Form",
+        "id": "1A.1",
+        "processStep": "If claim submission is incomplete or incorrect, request additional information",
+        "outputs": "Updated claim received",
+        "customers": "Claims Intake Team"
+      },
+      {
+        "pathType": "Exception",
+        "suppliers": "Internal Systems, Claims Processing Team",
+        "inputs": "Duplicate Claim Data",
+        "id": "1B.1",
+        "processStep": "If duplicate claim detected, reject claim and notify provider",
+        "outputs": "Claim rejection notice",
+        "customers": "Providers, Policyholders"
+      },
+      {
+        "pathType": "Exception",
+        "suppliers": "Claims Intake Team",
+        "inputs": "Date of Service (DOS), Claim Submission Date",
+        "id": "1C.1",
+        "processStep": "If claim is submitted past timely filing limit, deny or request proof of timely filing",
+        "outputs": "Claim Denied or Proof of Timely Filing Requested",
+        "customers": "Providers, Policyholders"
+      },
+      {
+        "pathType": "Happy",
+        "suppliers": "Providers, Policyholders, Internal Systems",
+        "inputs": "Claim Submission Data",
+        "id": "2",
+        "processStep": "Validate claim format",
+        "outputs": "Validated Claim Format",
+        "customers": "Internal Processing Teams"
+      },
+      {
+        "pathType": "Exception",
+        "suppliers": "Internal Systems",
+        "inputs": "Claim Submission Data",
+        "id": "2A.1",
+        "processStep": "If any claim does not meet format requirements, reject claim and notify provider",
+        "outputs": "Claim rejection notice",
+        "customers": "Providers"
+      }
+    ],
+    "sampleScreen4": [
+      {
+        "id": 1,
+        "processStep": "Receive claim submissions",
+        "col1": "No",
+        "col2": "No",
+        "col3": "No",
+        "col4": "No",
+        "description": "Claims intake is typically a structured, form-based process that does not require generative AI."
+      },
+      {
+        "id": 2,
+        "processStep": "Validate claim format",
+        "col1": "No",
+        "col2": "No",
+        "col3": "No",
+        "col4": "Yes",
+        "description": "Generative AI can verify both structured and unstructured claim formats, ensuring completeness and correct structure."
+      },
+      {
+        "id": 3,
+        "processStep": "Assign tracking numbers",
+        "col1": "No",
+        "col2": "No",
+        "col3": "No",
+        "col4": "No",
+        "description": "Assigning tracking numbers is a simple system/database function that does not require generative AI."
+      },
+      {
+        "id": 4,
+        "processStep": "Route claims for processing",
+        "col1": "No",
+        "col2": "No",
+        "col3": "No",
+        "col4": "No",
+        "description": "This process is commonly handled by rule-based automation, negating the need for generative AI."
+      },
+      {
+        "id": 5,
+        "processStep": "Extract claim data",
+        "col1": "Yes",
+        "col2": "No",
+        "col3": "No",
+        "col4": "No",
+        "description": "Generative AI can extract essential claim details from various document types, including PDFs, scanned files, and handwritten forms."
+      },
+      {
+        "id": 6,
+        "processStep": "Cleanse claim information",
+        "col1": "Yes",
+        "col2": "No",
+        "col3": "No",
+        "col4": "Yes",
+        "description": "AI can aid in the validation and correction of erroneous or missing data, addressing common submission errors."
+      }
+    ],
+    "sampleScreen5": [
+      {
+        "processCategory": "Intake and Validate Claims",
+        "subProcess": "Extract claim data",
+        "description": "Uses generative AI to extract key claim details from diverse document types (PDFs, scans, handwritten forms) and convert them into structured data.",
+        "requirement": "Understanding of various claim document formats and the key data elements required for processing.",
+        "functionality": "Data Extraction",
+        "metrics": "Extraction accuracy; reduction in manual data entry; overall processing speed",
+        "tbd": "TBD",
+        "prompt": "Extract all relevant fields (e.g., claim ID, date of service, provider details) from the attached claim document and present them in a structured format."
+      },
+      {
+        "processCategory": "Intake and Validate Claims",
+        "subProcess": "Cleanse claim information",
+        "description": "Applies AI-driven validation to detect and correct erroneous or incomplete claim data, thereby ensuring high data quality for downstream processing.",
+        "requirement": "Familiarity with common data quality issues in claims and the rules for data validation and correction.",
+        "functionality": "Validation, Cleansing",
+        "metrics": "Improvement in data accuracy; reduced rate of manual corrections; faster processing times",
+        "tbd": "TBD",
+        "prompt": "Review the extracted claim data for inconsistencies or errors. Provide the corrected, validated claim information along with suggestions for improvement."
+      }
+    ]
+  }
+  

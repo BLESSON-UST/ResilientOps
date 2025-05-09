@@ -1,0 +1,30 @@
+.App {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  
+  .carousel-container {
+    padding: 0;
+  }
+  
+  .login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #fff;
+    padding: 2rem;
+  }
+  
+  .login-form {
+    width: 100%;
+    max-width: 320px;
+    text-align: justify;
+  }
+
+  .forgotPassword{
+    text-decoration: none;
+    color: #0097ab;
+  }
+  

@@ -1,0 +1,8 @@
+.subButton.disabledButton {
+    color: gray !important; /* Change to your preferred disabled color */
+    border-color: gray !important; /* Change to your preferred border color */
+  }
+  
+  .subButton.disabledButton:hover {
+    background-color: transparent !important; /* Keep the hover effect consistent */
+  }
