@@ -86,6 +86,13 @@ class Service(db.Model):
     status = db.relationship("Status", backref="service", uselist=False)
     
 
+# Association Table
+service_dependencies = db.Table(
+    'service_dependencies',
+    db.Column('service_id', db.Integer, db.ForeignKey('service.id'), primary_key=True),
+    db.Column('dependency_id', db.Integer, db.ForeignKey('service.id'), primary_key=True)
+)
+
 class BIA(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
@@ -93,8 +100,17 @@ class BIA(db.Model):
     impact = db.Column(db.String(50))
     rto = db.Column(db.Integer)
     rpo = db.Column(db.Integer)
-    dependencies = db.Column(db.PickleType)
-    signed_off = db.Column(db.Boolean, default=False)  # Field to track sign-off status
+    signed_off = db.Column(db.Boolean, default=False)
+
+    # Use relationship to link dependent services
+    dependencies = db.relationship(
+        'Service',
+        secondary=service_dependencies,
+        primaryjoin=service_id == service_dependencies.c.service_id,
+        secondaryjoin=service_dependencies.c.dependency_id == Service.id,
+        backref='dependent_on'
+    )
+
 
 class Status(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -154,29 +170,79 @@ def role_required(*roles):
         return decorated
     return wrapper
 
-
 def calculate_risk_score(service, bia, status, all_services):
-    score, reason = 0, []
+    score = 0
+    reasons = []
 
+    # 1. Service status
     if status and status.status == 'Down':
-        score += 50
-        reason.append("Service is down")
-    if bia and bia.rto and bia.rto < 60:
-        score += 25
-        reason.append("RTO < 1 hour")
+        score += 40
+        reasons.append("Service is currently down")
 
-    services_by_id = {s.id: s for s in all_services}
-    for dep_id in bia.dependencies or []:
-        dep = services_by_id.get(dep_id)
-        if dep and dep.status and dep.status.status == 'Down':
-            score += 25
-            reason.append(f"Dependency {dep.name} is down")
+    # 2. Recent downtime analysis (last 7 days)
+    recent_downtimes = [
+        d for d in service.downtimes
+        if d.start_time >= datetime.utcnow() - timedelta(days=7)
+    ]
+    total_downtime_minutes = sum(
+        ((d.end_time or datetime.utcnow()) - d.start_time).total_seconds() / 60
+        for d in recent_downtimes
+    )
 
+    if total_downtime_minutes > 120:  # More than 2 hours in last 7 days
+        score += 20
+        reasons.append("Frequent or prolonged downtimes in the last 7 days")
+
+    # 3. BIA - Criticality
+    if bia:
+        if bia.criticality and bia.criticality.lower() == 'high':
+            score += 15
+            reasons.append("High criticality in BIA")
+        elif bia.criticality and bia.criticality.lower() == 'medium':
+            score += 10
+            reasons.append("Medium criticality in BIA")
+
+        # 4. BIA - Impact
+        if bia.impact and bia.impact.lower() in ['high', 'severe']:
+            score += 10
+            reasons.append(f"High impact in BIA: {bia.impact}")
+
+        # 5. BIA - RTO/RPO
+        if bia.rto and bia.rto < 60:
+            score += 10
+            reasons.append("RTO < 1 hour")
+        if bia.rpo and bia.rpo < 60:
+            score += 5
+            reasons.append("RPO < 1 hour")
+
+        # 6. Dependency health
+        if bia.dependencies:
+            down_dependencies = [
+                dep.name for dep in bia.dependencies
+                if dep.status and dep.status.status == 'Down'
+            ]
+            if down_dependencies:
+                score += 20
+                reasons.append(f"Dependencies down: {', '.join(down_dependencies)}")
+
+    # 7. Integration complexity
+    if len(service.integrations) > 3:
+        score += 10
+        reasons.append("High number of integrations")
+
+    # Risk level classification
     level = 'Low'
-    if score >= 80: level = 'High'
-    elif score >= 50: level = 'Medium'
+    if score >= 80:
+        level = 'High'
+    elif score >= 50:
+        level = 'Medium'
 
-    return {'risk_score': score, 'risk_level': level, 'reason': ', '.join(reason)}
+    return {
+        'risk_score': min(score, 100),
+        'risk_level': level,
+        'reason': ', '.join(reasons)
+    }
+
 
 # --- Schemas ---
 signup_model = auth_ns.model('Signup', {
@@ -197,7 +263,8 @@ service_model = service_ns.model('Service', {
     'impact': fields.String,
     'rto': fields.Integer,
     'rpo': fields.Integer,
-    'dependencies': fields.List(fields.Integer)
+    'dependencies': fields.List(fields.Integer),
+    'signed_off': fields.Boolean
 })
 
 status_model = service_ns.model('StatusUpdate', {
@@ -260,6 +327,7 @@ class Login(Resource):
                                     additional_claims={"username": user.username, "role": user.role})
         return {'access_token': token}, 200
 
+
 # --- Service Routes ---
 @service_ns.route('')
 class ServiceList(Resource):
@@ -270,18 +338,37 @@ class ServiceList(Resource):
     def post(self):
         data = service_ns.payload
         user = User.query.get(get_jwt_identity())
-        service = Service(name=data['name'], description=data.get('description'), created_by=user.username)
+        
+        # Create new Service instance
+        service = Service(
+            name=data['name'],
+            description=data.get('description'),
+            created_by=user.username
+        )
         db.session.add(service)
         db.session.commit()
 
-        bia = BIA(service_id=service.id,
-                  criticality=data.get('criticality'),
-                  impact=data.get('impact'),
-                  rto=data.get('rto'),
-                  rpo=data.get('rpo'),
-                  dependencies=data.get('dependencies', []))
+        # Create a new BIA instance
+        bia = BIA(
+            service_id=service.id,
+            criticality=data.get('criticality'),
+            impact=data.get('impact'),
+            rto=data.get('rto'),
+            rpo=data.get('rpo'),
+            signed_off=data.get('signed_off', False)
+        )
         db.session.add(bia)
         db.session.commit()
+
+        # Now handle dependencies - ensure you're passing Service instances, not just IDs
+        dependencies = data.get('dependencies', [])
+        for dep_id in dependencies:
+            dependent_service = Service.query.get(dep_id)  # Fetch Service by ID
+            if dependent_service:
+                bia.dependencies.append(dependent_service)  # Add the dependent service to the BIA's dependencies
+
+        db.session.commit()  # Commit the relationship updates
+
         log_audit("Service Created", "Service", service.id, user.id)
         return {'message': 'Service created'}, 201
 
@@ -300,11 +387,14 @@ class ServiceList(Resource):
                     'impact': s.bia.impact if s.bia else None,
                     'rto': s.bia.rto if s.bia else None,
                     'rpo': s.bia.rpo if s.bia else None,
-                    'dependencies': s.bia.dependencies if s.bia else []
+                    'signed_off': s.bia.signed_off if s.bia else False,
+                    'dependencies': [dep.id for dep in s.bia.dependencies] if s.bia else []  # List only IDs of dependencies
                 },
-                'status': s.status.status if s.status else "Unknown"
+                'status': s.status.status if s.status else "Unknown",
+                'last_updated': s.status.last_updated.isoformat() if s.status and s.status.last_updated else None
             })
         return results
+
 
     @jwt_required()
     @role_required('Business Owner')
@@ -312,7 +402,7 @@ class ServiceList(Resource):
     def put(self):
         data = service_ns.payload
         service = Service.query.get_or_404(data['id'])
-    
+
         # Update Service fields
         service.name = data.get('name', service.name)
         service.description = data.get('description', service.description)
@@ -323,10 +413,15 @@ class ServiceList(Resource):
             service.bia.impact = data.get('impact', service.bia.impact)
             service.bia.rto = data.get('rto', service.bia.rto)
             service.bia.rpo = data.get('rpo', service.bia.rpo)
-            service.bia.dependencies = data.get('dependencies', service.bia.dependencies)
+            service.bia.signed_off = data.get('signed_off', service.bia.signed_off)
+            # Handle dependencies properly
+            dependency_ids = data.get('dependencies')
+            if dependency_ids is not None:
+                service.bia.dependencies = [
+                    Service.query.get(dep_id) for dep_id in dependency_ids if Service.query.get(dep_id)
+                ]
 
         db.session.commit()
-
         log_audit("Service Updated", "Service", service.id, get_jwt_identity())
         return {'message': 'Service updated successfully'}, 200
 
@@ -381,7 +476,8 @@ class ServiceStatus(Resource):
         log_audit("Status Updated", "Status", service_id, get_jwt_identity())
         return {'message': 'Status updated successfully'}, 200
 
-# --- BIA Routes ---
+
+# --- BIA Route ---
 @service_ns.route('/<int:service_id>/bia')
 class BIAResource(Resource):
     @jwt_required()
@@ -391,22 +487,36 @@ class BIAResource(Resource):
         data = service_ns.payload
         service = Service.query.get_or_404(service_id)
 
+        # Resolve dependency IDs into Service instances 
+        dependency_ids = data.get('dependencies')
+        resolved_dependencies = [
+            Service.query.get(dep_id) for dep_id in dependency_ids if Service.query.get(dep_id)
+        ] if dependency_ids else []
+
         # If BIA doesn't exist, create it
         if not service.bia:
-            bia = BIA(service_id=service.id, criticality=data.get('criticality'),
-                      impact=data.get('impact'), rto=data.get('rto'),
-                      rpo=data.get('rpo'), dependencies=data.get('dependencies', []))
+            bia = BIA(
+                service_id=service.id,
+                criticality=data.get('criticality'),
+                impact=data.get('impact'),
+                rto=data.get('rto'),
+                rpo=data.get('rpo'),
+                signed_off=data.get('signed_off', False),
+                dependencies=resolved_dependencies
+            )
             db.session.add(bia)
         else:
             service.bia.criticality = data.get('criticality', service.bia.criticality)
             service.bia.impact = data.get('impact', service.bia.impact)
             service.bia.rto = data.get('rto', service.bia.rto)
             service.bia.rpo = data.get('rpo', service.bia.rpo)
-            service.bia.dependencies = data.get('dependencies', service.bia.dependencies)
+            service.bia.signed_off = data.get('signed_off', service.bia.signed_off)
+            service.bia.dependencies = resolved_dependencies
 
         db.session.commit()
         log_audit("BIA Updated", "BIA", service_id, get_jwt_identity())
         return {'message': 'BIA updated successfully'}, 200
+
 
     @jwt_required()
     @role_required('Business Owner')
@@ -420,11 +530,11 @@ class BIAResource(Resource):
         else:
             return {'error': 'No BIA found for this service'}, 404
 
+# --- Risk Route ---
 
 @risk_ns.route('/<int:service_id>')
 class GetRisk(Resource):
     @jwt_required()
-    @role_required('Ops Analyst')
     def get(self, service_id):
         service = Service.query.get_or_404(service_id)
         
@@ -469,7 +579,15 @@ class SaveRisk(Resource):
         db.session.commit()
 
         log_audit("Automated Risk Score Saved", "Risk", service_id, get_jwt_identity())
-        return {'message': 'Risk score saved'}, 200
+
+        return {
+            'message': 'Risk score saved',
+            'service_id': service.id,
+            'risk_score': result['risk_score'],
+            'risk_level': result['risk_level'],
+            'reason': result['reason']
+        }, 200
+
 
 @risk_ns.route('/<int:service_id>/manual')
 class ManualRisk(Resource):
@@ -495,8 +613,11 @@ class ManualRisk(Resource):
         data = risk_ns.payload
 
         # Find the most recent manual risk for the service
-        risk = Risk.query.filter_by(service_id=service_id, source='manual') \
-                         .order_by(Risk.created_at.desc()).first()
+        # risk = Risk.query.filter_by(service_id=service_id, source='manual') \
+        #                  .order_by(Risk.created_at.desc()).first()
+        risk = Risk.query.filter_by(service_id=service_id) \
+                 .order_by(Risk.created_at.desc()).first()
+
         
         if not risk:
             return {'message': 'No manual risk record found to update.'}, 404
@@ -519,7 +640,6 @@ class ManualRisk(Resource):
 @audit_ns.route('')
 class AuditLogList(Resource):
     @jwt_required()
-    # @role_required('admin')
     def get(self):
         logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).all()
         return [{
@@ -568,116 +688,215 @@ class IntegrationAPI(Resource):
             'created_at': i.created_at.isoformat()
         } for i in integrations], 200
 
+
 @service_ns.route('/dependencies')
 class ServiceDependencies(Resource):
     @jwt_required()
     @role_required('Engineer')
     def get(self):
-        services = Service.query.join(BIA).all()
+        services = Service.query.all()
         result = []
 
         for service in services:
             if service.bia and service.bia.dependencies:
+                dependencies_info = []
+
+                for dep in service.bia.dependencies:
+                    dep_bia = dep.bia
+                    dep_status = dep.status
+
+                    dependencies_info.append({
+                        "service_id": dep.id,
+                        "service_name": dep.name,
+                        "criticality": dep_bia.criticality if dep_bia else None,
+                        "impact": dep_bia.impact if dep_bia else None,
+                        "rto": dep_bia.rto if dep_bia else None,
+                        "rpo": dep_bia.rpo if dep_bia else None,
+                        "status": dep_status.status if dep_status else None
+                    })
+
                 result.append({
                     "service_id": service.id,
                     "service_name": service.name,
-                    "dependencies": service.bia.dependencies
+                    "dependencies": dependencies_info
                 })
 
         return {"dependencies": result}, 200
+
     
+
 @service_ns.route('/<int:service_id>/downtime')
 class ServiceDowntime(Resource):
     @jwt_required()
-    # @service_ns.expect(downtime_model)
     def post(self, service_id):
-        data = service_ns.payload
+        data = request.get_json()
         service = Service.query.get_or_404(service_id)
-        downtime = Downtime(service_id=service.id, start_time=data['start_time'], end_time=data['end_time'])
+
+        try:
+            # Parse and validate timestamps
+            start_time = datetime.fromisoformat(data['start_time'])
+            end_time = datetime.fromisoformat(data['end_time']) if data.get('end_time') else None
+        except ValueError:
+            return {'message': 'Invalid date format. Use ISO 8601 (YYYY-MM-DDTHH:MM:SS).'}, 400
+
+        reason = data.get('reason', 'Not specified')
+
+        # Log downtime
+        downtime = Downtime(
+            service_id=service.id,
+            start_time=start_time,
+            end_time=end_time,
+            reason=reason
+        )
         db.session.add(downtime)
         db.session.commit()
+
         log_audit("Downtime Logged", "Downtime", service_id, get_jwt_identity())
-        return {'message': 'Downtime logged'}, 200
+
+        return {
+            'message': 'Downtime logged',
+            'downtime': {
+                'service_id': service.id,
+                'start_time': start_time.isoformat(),
+                'end_time': end_time.isoformat() if end_time else None,
+                'reason': reason
+            }
+        }, 200
+        
+    @jwt_required()
+    def get(self, service_id):
+        service = Service.query.get_or_404(service_id)
+        downtimes = Downtime.query.filter_by(service_id=service.id).order_by(Downtime.start_time.desc()).all()
+
+        downtime_list = []
+        for dt in downtimes:
+            start = dt.start_time
+            end = dt.end_time or datetime.utcnow()
+            duration = end - start
+            total_minutes = int(duration.total_seconds() / 60)
+
+            downtime_list.append({
+                'start_time': start.isoformat(),
+                'end_time': dt.end_time.isoformat() if dt.end_time else None,
+                'reason': dt.reason,
+                'duration': str(duration),
+                'total_minutes': total_minutes
+            })
+
+        return jsonify({
+            'service_id': service.id,
+            'service_name': service.name,
+            'downtime_count': len(downtime_list),
+            'downtimes': downtime_list
+        })
 
 # --- health check ---
-
 def run_health_checks():
-    # Ensure that the application context is available during the job execution
-    with app.app_context():  # Ensure app context for the database query
-        # Fetch all services
+    with app.app_context():
         services = Service.query.all()
 
-        # Initialize a flag to commit after processing all services
         status_changes = False
 
-        # Iterate over all services
         for service in services:
-            # Get associated status and BIA
             status = service.status
             now = datetime.utcnow()
 
-            # Check if status exists for the service
             if status and status.last_updated:
-                # If status was last updated more than 5 minutes ago, mark as Down
                 delta = now - status.last_updated
-                if delta > timedelta(minutes=5):
+
+                # Define different states based on how long since the last check
+                if delta > timedelta(minutes=10):  # Down state after 10 mins
                     if status.status != "Down":
                         status.status = "Down"
                         status_changes = True
-                else:
+                        send_alert(service)  # You can define this function for notifications
+                elif delta > timedelta(minutes=5):  # Degraded state
+                    if status.status != "Degraded":
+                        status.status = "Degraded"
+                        status_changes = True
+                else:  # Healthy state
                     if status.status != "Healthy":
                         status.status = "Healthy"
                         status_changes = True
             else:
-                # If no status exists, create a new status
                 if not status:
                     status = Status(service_id=service.id)
                     db.session.add(status)
-                # If status hasn't been updated, mark it as Unknown
                 if status.status != "Unknown":
                     status.status = "Unknown"
                     status_changes = True
 
-            # Update the last_updated timestamp
             status.last_updated = now
 
-        # Commit only if there were changes
         if status_changes:
             db.session.commit()
+
+def send_alert(service):
+    # Function to send email or Slack alert
+    # Here you would integrate with your alerting system (email, Slack, etc.)
+    print(f"ALERT: {service.name} is down!")
+
 
 @service_ns.route('/<int:service_id>/health')
 class ServiceHealth(Resource):
     @jwt_required()
     def get(self, service_id):
         service = Service.query.get_or_404(service_id)
-        bia = service.bia  # Static BIA attributes
-        status = service.status  # Real-time health status
+        bia = service.bia
+        status = service.status
         latest_downtime = Downtime.query.filter_by(service_id=service_id).order_by(Downtime.start_time.desc()).first()
         all_services = Service.query.all()
 
         result = calculate_risk_score(service, bia, status, all_services)
 
-        return {
+        # Include additional information about historical health, uptime, etc.
+        health_info = {
             "service_id": service.id,
             "name": service.name,
-            "status": status.status if status else "Unknown",  # status from the Status table
+            # "status": status.status if status else "Unknown",
             "last_updated": status.last_updated.isoformat() if status and status.last_updated else None,
             "bia": {
                 "criticality": bia.criticality if bia else None,
                 "rto": bia.rto if bia else None,
-                "rpo": bia.rpo if bia else None,
-                "dependencies": [Service.query.get(d).name for d in (bia.dependencies or []) if Service.query.get(d)] if bia else []
+                "rpo": bia.rpo if bia else None
             },
             "downtime": {
                 "start_time": latest_downtime.start_time.isoformat() if latest_downtime else None,
                 "reason": latest_downtime.reason if latest_downtime else None
             },
             "overall_health": result['risk_level'],
-            "reason": result['reason']
-        }, 200
+            "reason": result['reason'],
+            # "health_trend": get_health_trend(service.id),  # New health trend data
+            "uptime_percentage": calculate_uptime_percentage(service)  # Uptime calculation
+        }
+
+        return health_info, 200
+
+def get_health_trend(service_id):
+    # Fetch historical status changes over the last week/month/etc.
+    recent_statuses = Status.query.filter_by(service_id=service_id).order_by(Status.last_updated.desc()).limit(10).all()
+    trend = []
+    for status in recent_statuses:
+        trend.append({
+            "status": status.status,
+            "last_updated": status.last_updated.isoformat()
+        })
+    return trend
+
+def calculate_uptime_percentage(service):
+    # Calculate uptime percentage based on downtime records
+    total_time = datetime.utcnow() - service.status.last_updated  # Or use a specific timeframe
+    downtime = Downtime.query.filter_by(service_id=service.id).all()
+
+    downtime_duration = sum([(downtime.end_time or datetime.utcnow()) - downtime.start_time for downtime in downtime], timedelta())
+    uptime_duration = total_time - downtime_duration
+
+    uptime_percentage = (uptime_duration / total_time) * 100 if total_time else 100
+    return round(uptime_percentage, 2)
+
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(run_health_checks, 'interval', minutes=1)
+scheduler.add_job(run_health_checks, 'interval', minutes=15)
 scheduler.start()
 
 # --- Init & Run ---

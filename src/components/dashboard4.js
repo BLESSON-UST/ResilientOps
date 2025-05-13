@@ -12,47 +12,15 @@ import {
   Checkbox,
   IconButton,
 } from "@mui/material";
+import { useNavigate, useLocation } from "react-router-dom";
 import AddIcon from "@mui/icons-material/Add";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import DeleteIcon from "@mui/icons-material/Delete";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
-import { useNavigate, useLocation } from "react-router-dom";
-
-const initialServices = [
-  {
-    id: "1",
-    name: "Authentication Service",
-    status: "Healthy",
-    risk: "Low",
-    rto: "2 hours",
-    dependencies: 3,
-    verified: true,
-    type: "core",
-  },
-  {
-    id: "2",
-    name: "Order Processing",
-    status: "Degraded",
-    risk: "High",
-    rto: "6 hours",
-    dependencies: 5,
-    verified: false,
-    type: "core",
-  },
-  {
-    id: "3",
-    name: "Payment Gateway",
-    status: "Down",
-    risk: "Critical",
-    rto: "8 hours",
-    dependencies: 2,
-    verified: false,
-    type: "support",
-  },
-];
+import BASE_URL from '../ApiConfig/apiConfig';
+import axios from "axios";
+import jwtDecode from "jwt-decode"; // Import jwt-decode
 
 const riskColor = (risk) => {
   switch (risk) {
@@ -73,30 +41,87 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [servicesList, setServicesList] = useState(initialServices);
+  const [servicesList, setServicesList] = useState([]);
   const [selectedServiceType, setSelectedServiceType] = useState("");
   const [selectedCards, setSelectedCards] = useState([]);
-  const [verifiedServices, setVerifiedServices] = useState(
-    initialServices.reduce((acc, svc) => {
-      acc[svc.id] = svc.verified;
-      return acc;
-    }, {})
-  );
+  const [verifiedServices, setVerifiedServices] = useState({});
+  const [userRole, setUserRole] = useState(""); // State to store user role
 
-  // Add new service if passed from navigation state
   useEffect(() => {
-    if (location.state?.newService) {
-      const newService = location.state.newService;
-      setServicesList((prev) => [...prev, newService]);
-      setVerifiedServices((prev) => ({
-        ...prev,
-        [newService.id]: newService.verified || false,
-      }));
-
-      // Clear navigation state to prevent re-adding on refresh
-      navigate(location.pathname, { replace: true });
+    // Decode JWT token and extract role
+    const token = sessionStorage.getItem("accessToken");
+    if (token) {
+      try {
+        const decodedToken = jwtDecode(token);
+        setUserRole(decodedToken.role || ""); // Adjust 'role' key based on your JWT payload
+      } catch (error) {
+        console.error("Failed to decode token:", error);
+      }
     }
-  }, [location, navigate]);
+
+    const fetchServicesAndRisks = async () => {
+      try {
+        // Fetch all services
+        const servicesResponse = await axios.get(`${BASE_URL}/services`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const services = servicesResponse.data;
+
+        // Fetch risk for each service
+        const servicesWithRisk = await Promise.all(
+          services.map(async (svc) => {
+            try {
+              const riskResponse = await axios.get(`${BASE_URL}/risk/${svc.id}`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+
+              const risk = riskResponse.data;
+
+              return {
+                id: svc.id,
+                name: svc.name,
+                status: svc.status || "Unknown",
+                risk: risk.risk_level || "Unknown",
+                rto: svc.bia?.rto ? `${svc.bia.rto} minutes` : "N/A",
+                dependencies: svc.bia?.dependencies?.length || 0,
+                verified: false,
+                type: "core",
+                last_updated: svc.last_updated || null,
+              };
+            } catch (error) {
+              return {
+                id: svc.id,
+                name: svc.name,
+                status: svc.status || "Unknown",
+                risk: "Unknown",
+                rto: svc.bia?.rto ? `${svc.bia.rto} minutes` : "N/A",
+                dependencies: svc.bia?.dependencies?.length || 0,
+                verified: false,
+                type: "core",
+                last_updated: svc.last_updated || null,
+              };
+            }
+          })
+        );
+
+        setServicesList(servicesWithRisk);
+        const verifiedMap = {};
+        servicesWithRisk.forEach((svc) => {
+          verifiedMap[svc.id] = svc.verified;
+        });
+        setVerifiedServices(verifiedMap);
+      } catch (err) {
+        console.error("Failed to fetch services or risks:", err);
+      }
+    };
+
+    fetchServicesAndRisks();
+  }, []);
 
   const toggleVerification = (id) => {
     setVerifiedServices((prev) => ({
@@ -117,57 +142,43 @@ const Dashboard = () => {
 
   return (
     <Box p={2} sx={{ bgcolor: "white", minHeight: "100vh" }}>
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={2}
-        sx={{
-          position: "sticky",
-          top: "-17px",
-          zIndex: 1000,
-          backgroundColor: "white",
-          pb: 2,
-          pt: 2,
-        }}
-      >
-        <Typography variant="h4" fontWeight="bold">
-          ResilientOps Dashboard
-        </Typography>
-        <FormControl variant="outlined" size="small" sx={{ width: 250 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h4">Service Dashboard</Typography>
+        <FormControl variant="outlined" size="small">
           <InputLabel>Service Type</InputLabel>
           <Select
             value={selectedServiceType}
             onChange={(e) => setSelectedServiceType(e.target.value)}
             label="Service Type"
-            IconComponent={ArrowDropDownIcon}
           >
             <MenuItem value="">All</MenuItem>
-            <MenuItem value="core">Core Services</MenuItem>
-            <MenuItem value="support">Support Services</MenuItem>
+            <MenuItem value="core">Core</MenuItem>
+            <MenuItem value="support">Support</MenuItem>
           </Select>
         </FormControl>
       </Box>
 
       <Grid container spacing={3}>
-        {/* Add New Card */}
-        <Grid item xs={12} sm={6} md={3} display="flex" justifyContent="center">
-          <Card
-            onClick={() => navigate("/new")}
-            sx={{
-              width: 300,
-              height: 300,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              border: "2px dashed #ccc",
-              borderRadius: 2,
-            }}
-          >
-            <AddIcon sx={{ fontSize: 60 }} />
-          </Card>
-        </Grid>
+        {/* Conditionally render Add New Card for Business Owner role */}
+        {userRole === "Business Owner" && (
+          <Grid item xs={12} sm={6} md={3} display="flex" justifyContent="center">
+            <Card
+              onClick={() => navigate("/new")}
+              sx={{
+                width: 300,
+                height: 300,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                border: "2px dashed #ccc",
+                borderRadius: 2,
+              }}
+            >
+              <AddIcon sx={{ fontSize: 60 }} />
+            </Card>
+          </Grid>
+        )}
 
         {/* Render Service Cards */}
         {filteredServices.map((svc) => (
@@ -187,7 +198,7 @@ const Dashboard = () => {
                 position: "relative",
                 borderRadius: 2,
                 boxShadow: 2,
-                bgcolor: "#f9f9f9",
+                bgcolor: selectedCards.includes(svc.id) ? "#f0f0f0" : "#f9f9f9",
                 borderTop: `6px solid ${riskColor(svc.risk)}`,
               }}
             >
@@ -225,9 +236,7 @@ const Dashboard = () => {
                 <Typography
                   variant="caption"
                   sx={{
-                    bgcolor: verifiedServices[svc.id]
-                      ? "#78bf35"
-                      : "#e1c515",
+                    bgcolor: verifiedServices[svc.id] ? "#78bf35" : "#e1c515",
                     color: "white",
                     px: 1,
                     py: 0.5,
@@ -252,8 +261,9 @@ const Dashboard = () => {
                   }}
                 >
                   <Typography variant="caption">
-                    Last updated: 1 month ago
+                    Last updated: {svc.last_updated ? new Date(svc.last_updated).toLocaleDateString() : "N/A"}
                   </Typography>
+
                   <Box>
                     <IconButton
                       size="small"
@@ -267,17 +277,9 @@ const Dashboard = () => {
                     </IconButton>
                     <IconButton
                       size="small"
-                      onClick={() => navigate(`/service/${svc.id}/edit`)}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
                       onClick={() => {
                         if (
-                          window.confirm(
-                            `Are you sure you want to delete ${svc.name}?`
-                          )
+                          window.confirm(`Are you sure you want to delete ${svc.name}?`)
                         ) {
                           alert("Service deleted (not yet implemented)");
                         }

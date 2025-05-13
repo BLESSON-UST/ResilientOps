@@ -41,11 +41,11 @@ const BreadcrumbsComponent = () => {
     <Breadcrumbs aria-label="breadcrumb" separator=">" sx={{ paddingLeft: 2, }}>
     {/* Only show the Home link if we're not on the home page */}
     {location.pathname !== '/home' && (
-      <Link to="/home" style={{ color: "#828282" }}>Home</Link>
+      <Link to="/db4" style={{ color: "#828282" }}>Home</Link>
     )}
 
     {/* Show breadcrumbItems only if we're not on the home page */}
-    {location.pathname !== '/home' && breadcrumbItems}
+    {location.pathname !== '/db4' && breadcrumbItems}
   </Breadcrumbs>
   );
 };
