@@ -273,6 +273,7 @@ const Dashboard = () => {
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
               <Box sx={{ width: 300, height: 9, bgcolor: riskColor(svc.risk), mb: 0 , borderRadius: 2,}} />
               <Card
+                onClick={() => navigate(`/service/${svc.id}/view`, { state: { service: svc } })}
                 sx={{
                   width: 300,
                   height: 300,
@@ -324,15 +325,7 @@ const Dashboard = () => {
                       Last updated: {svc.last_updated ? new Date(svc.last_updated).toLocaleDateString() : "N/A"}
                     </Typography>
                     <Box>
-                      <IconButton
-                        size="small"
-                        onClick={() => navigate(`/service/${svc.id}/view`, { state: { service: svc } })}
-                      >
-                        <VisibilityIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDeleteClick(svc)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                     
                     </Box>
                   </Box>
                 </CardContent>

@@ -17,6 +17,8 @@ from flask import request
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
 import requests
+import datetime as dt  # Added for datetime.UTC
+from datetime import datetime, timezone, timedelta
 
 # --- ENV & Logging ---
 load_dotenv()
@@ -65,8 +67,6 @@ api.add_namespace(risk_ns)
 api.add_namespace(audit_ns)
 api.add_namespace(alert_ns)
 
-from datetime import datetime
-
 # --- Models ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -87,141 +87,88 @@ class Service(db.Model):
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
     created_by = db.Column(db.String(100))
-    
-    # Relationships with cascade delete
-    bia = db.relationship(
-        "BIA", backref="service", uselist=False,
-        cascade="all, delete-orphan", passive_deletes=True
-    )
-    status = db.relationship(
-        "Status", backref="service", uselist=False,
-        cascade="all, delete-orphan", passive_deletes=True
-    )
-    downtimes = db.relationship(
-        'Downtime', backref='service',
-        cascade='all, delete-orphan', passive_deletes=True
-    )
-    integrations = db.relationship(
-        'Integration', backref='service',
-        cascade='all, delete-orphan', passive_deletes=True
-    )
-    risks = db.relationship(
-        'Risk', backref='service',
-        cascade='all, delete-orphan', passive_deletes=True
-    )
-    alerts = db.relationship(
-        'Alert', backref='service',
-        cascade='all, delete-orphan', passive_deletes=True
-    )
-    sla_breaches = db.relationship(
-        'SLABreach', backref='service',
-        cascade='all, delete-orphan', passive_deletes=True
-    )
+    bia = db.relationship("BIA", backref="service", uselist=False)
+    status = db.relationship("Status", backref="service", uselist=False)
 
-# Association Table for many-to-many dependencies
+# Association Table
 service_dependencies = db.Table(
     'service_dependencies',
-    db.Column('service_id', db.Integer, db.ForeignKey('service.id', ondelete='CASCADE'), primary_key=True),
-    db.Column('dependency_id', db.Integer, db.ForeignKey('service.id', ondelete='CASCADE'), primary_key=True)
+    db.Column('service_id', db.Integer, db.ForeignKey('service.id'), primary_key=True),
+    db.Column('dependency_id', db.Integer, db.ForeignKey('service.id'), primary_key=True)
 )
 
 class BIA(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    service_id = db.Column(
-        db.Integer,
-        db.ForeignKey('service.id', ondelete='CASCADE'),
-        nullable=False
-    )
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
     criticality = db.Column(db.String(20))
     impact = db.Column(db.String(50))
     rto = db.Column(db.Integer)
     rpo = db.Column(db.Integer)
     signed_off = db.Column(db.Boolean, default=False)
-    
     dependencies = db.relationship(
         'Service',
         secondary=service_dependencies,
         primaryjoin=service_id == service_dependencies.c.service_id,
         secondaryjoin=service_dependencies.c.dependency_id == Service.id,
-        backref='dependent_on',
-        cascade="all"
+        backref='dependent_on'
     )
 
 class Status(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    service_id = db.Column(
-        db.Integer,
-        db.ForeignKey('service.id', ondelete='CASCADE'),
-        nullable=False
-    )
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
     status = db.Column(db.String(20))
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=lambda: datetime.now(dt.UTC))
 
 class Downtime(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    service_id = db.Column(
-        db.Integer,
-        db.ForeignKey('service.id', ondelete='CASCADE'),
-        nullable=False
-    )
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime)
     reason = db.Column(db.String(255))
+    service = db.relationship('Service', backref=db.backref('downtimes', lazy=True))
 
 class Integration(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    service_id = db.Column(
-        db.Integer,
-        db.ForeignKey('service.id', ondelete='CASCADE'),
-        nullable=False
-    )
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
     type = db.Column(db.String(50))
     config = db.Column(db.JSON)
     created_by = db.Column(db.String(100))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(dt.UTC))
+    service = db.relationship('Service', backref=db.backref('integrations', lazy=True))
 
 class Risk(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    service_id = db.Column(
-        db.Integer,
-        db.ForeignKey('service.id', ondelete='CASCADE'),
-        nullable=False
-    )
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
     risk_score = db.Column(db.Integer, nullable=False)
     risk_level = db.Column(db.String(20), nullable=False)
     reason = db.Column(db.Text)
     is_critical = db.Column(db.Boolean, default=False)
     source = db.Column(db.String(20), default='automated')
     created_by = db.Column(db.String(100))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(dt.UTC))
+    service = db.relationship("Service", backref=db.backref("risks", lazy=True))
 
 class Alert(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    service_id = db.Column(
-        db.Integer,
-        db.ForeignKey('service.id', ondelete='CASCADE'),
-        nullable=False
-    )
-    type = db.Column(db.String(50), nullable=False)
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
+    type = db.Column(db.String(50), nullable=False)  # e.g., 'StatusChange', 'HighRisk', 'Critical', 'SLA_RTO', 'SLA_RPO'
     message = db.Column(db.Text, nullable=False)
-    severity = db.Column(db.String(20), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    severity = db.Column(db.String(20), nullable=False)  # e.g., 'Critical', 'Warning', 'Info'
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(dt.UTC))
     acknowledged = db.Column(db.Boolean, default=False)
+    service = db.relationship('Service', backref=db.backref('alerts', lazy=True))
 
 class SLABreach(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    service_id = db.Column(
-        db.Integer,
-        db.ForeignKey('service.id', ondelete='CASCADE'),
-        nullable=False
-    )
-    type = db.Column(db.String(20), nullable=False)
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
+    type = db.Column(db.String(20), nullable=False)  # e.g., 'RTO', 'RPO'
     downtime_minutes = db.Column(db.Integer, nullable=False)
     threshold_minutes = db.Column(db.Integer, nullable=False)
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime)
     reason = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(dt.UTC))
+    service = db.relationship('Service', backref=db.backref('sla_breaches', lazy=True))
 
 # --- Utility ---
 def log_audit(action, entity, entity_id, user_id):
@@ -252,10 +199,10 @@ def calculate_risk_score(service, bia, status, all_services):
 
     recent_downtimes = [
         d for d in service.downtimes
-        if d.start_time >= datetime.utcnow() - timedelta(days=7)
+        if d.start_time >= datetime.now(dt.UTC) - timedelta(days=7)
     ]
     total_downtime_minutes = sum(
-        ((d.end_time or datetime.utcnow()) - d.start_time).total_seconds() / 60
+        ((d.end_time or datetime.now(dt.UTC)) - d.start_time).total_seconds() / 60
         for d in recent_downtimes
     )
 
@@ -434,7 +381,7 @@ class ServiceList(Resource):
     @service_ns.expect(service_model)
     def post(self):
         data = service_ns.payload
-        user = User.query.get(get_jwt_identity())
+        user = db.session.get(User, get_jwt_identity())
         service = Service(
             name=data['name'],
             description=data.get('description'),
@@ -454,7 +401,7 @@ class ServiceList(Resource):
         db.session.commit()
         dependencies = data.get('dependencies', [])
         for dep_id in dependencies:
-            dependent_service = Service.query.get(dep_id)
+            dependent_service = db.session.get(Service, dep_id)
             if dependent_service:
                 bia.dependencies.append(dependent_service)
         db.session.commit()
@@ -489,7 +436,9 @@ class ServiceList(Resource):
     @service_ns.expect(service_model)
     def put(self):
         data = service_ns.payload
-        service = Service.query.get_or_404(data['id'])
+        service = db.session.get(Service, data['id'])
+        if not service:
+            return {'error': 'Service not found'}, 404
         service.name = data.get('name', service.name)
         service.description = data.get('description', service.description)
         if service.bia:
@@ -501,43 +450,11 @@ class ServiceList(Resource):
             dependency_ids = data.get('dependencies')
             if dependency_ids is not None:
                 service.bia.dependencies = [
-                    Service.query.get(dep_id) for dep_id in dependency_ids if Service.query.get(dep_id)
+                    db.session.get(Service, dep_id) for dep_id in dependency_ids if db.session.get(Service, dep_id)
                 ]
         db.session.commit()
         log_audit("Service Updated", "Service", service.id, get_jwt_identity())
         return {'message': 'Service updated successfully'}, 200
-
-    
-    @jwt_required()
-    @role_required('Business Owner')
-    @api.doc(security='Bearer')
-    @service_ns.expect(api.model('DeleteServiceModel', {
-        'id': fields.Integer(required=True, description='ID of the service to delete')
-    }))
-    def delete(self):
-        data = request.get_json()
-        service_id = data.get('id')
-
-        if not service_id:
-            return {'message': 'id is required'}, 400
-
-        user = User.query.get(get_jwt_identity())
-        service = Service.query.get(service_id)
-
-        if not service:
-            return {'message': 'Service not found'}, 404
-
-        try:
-            log_audit("Service Deleted", "Service", service_id, user.id)
-            db.session.delete(service)  # Cascades will handle related deletions
-            db.session.commit()
-
-            return {'message': 'Service deleted successfully'}, 200
-        except Exception as e:
-            db.session.rollback()
-            return {'message': 'Error deleting service', 'error': str(e)}, 500
-
-
 
 # --- Service Status Route ---
 @service_ns.route('/<int:service_id>/status')
@@ -552,7 +469,7 @@ class ServiceStatus(Resource):
             status = Status(service_id=service_id, status=data['status'])
         else:
             status.status = data['status']
-            status.last_updated = datetime.utcnow()
+            status.last_updated = datetime.now(dt.UTC)
         db.session.add(status)
         db.session.commit()
         log_audit("Status Updated", "Status", service_id, get_jwt_identity())
@@ -568,7 +485,7 @@ class ServiceStatus(Resource):
             status = Status(service_id=service_id, status=data['status'])
         else:
             status.status = data['status']
-            status.last_updated = datetime.utcnow()
+            status.last_updated = datetime.now(dt.UTC)
         db.session.add(status)
         db.session.commit()
         log_audit("Status Updated", "Status", service_id, get_jwt_identity())
@@ -582,10 +499,12 @@ class BIAResource(Resource):
     @service_ns.expect(service_model)
     def put(self, service_id):
         data = service_ns.payload
-        service = Service.query.get_or_404(service_id)
+        service = db.session.get(Service, service_id)
+        if not service:
+            return {'error': 'Service not found'}, 404
         dependency_ids = data.get('dependencies')
         resolved_dependencies = [
-            Service.query.get(dep_id) for dep_id in dependency_ids if Service.query.get(dep_id)
+            db.session.get(Service, dep_id) for dep_id in dependency_ids if db.session.get(Service, dep_id)
         ] if dependency_ids else []
         if not service.bia:
             bia = BIA(
@@ -612,7 +531,9 @@ class BIAResource(Resource):
     @jwt_required()
     @role_required('Business Owner')
     def delete(self, service_id):
-        service = Service.query.get_or_404(service_id)
+        service = db.session.get(Service, service_id)
+        if not service:
+            return {'error': 'Service not found'}, 404
         if service.bia:
             db.session.delete(service.bia)
             db.session.commit()
@@ -626,7 +547,9 @@ class BIAResource(Resource):
 class GetRisk(Resource):
     @jwt_required()
     def get(self, service_id):
-        service = Service.query.get_or_404(service_id)
+        service = db.session.get(Service, service_id)
+        if not service:
+            return {'error': 'Service not found'}, 404
         latest_risk = Risk.query.filter_by(service_id=service.id).order_by(Risk.created_at.desc()).first()
         if not latest_risk:
             return {'message': 'No risk score available for this service'}, 404
@@ -646,7 +569,9 @@ class SaveRisk(Resource):
     @jwt_required()
     @role_required('Ops Analyst')
     def post(self, service_id):
-        service = Service.query.get_or_404(service_id)
+        service = db.session.get(Service, service_id)
+        if not service:
+            return {'error': 'Service not found'}, 404
         bia = BIA.query.filter_by(service_id=service.id).first()
         status = Status.query.filter_by(service_id=service.id).first()
         all_services = Service.query.all()
@@ -703,7 +628,7 @@ class ManualRisk(Resource):
         risk.risk_level = data['risk_level']
         risk.reason = data.get('reason', risk.reason)
         risk.is_critical = data.get('is_critical', risk.is_critical)
-        risk.created_at = datetime.utcnow()
+        risk.created_at = datetime.now(dt.UTC)
         risk.created_by = get_jwt_identity()
         db.session.commit()
         log_audit("Manual Risk Score Updated", "Risk", service_id, get_jwt_identity())
@@ -732,7 +657,7 @@ class IntegrationAPI(Resource):
     @service_ns.expect(integration_model)
     def post(self):
         data = request.get_json()
-        service = Service.query.get(data['service_id'])
+        service = db.session.get(Service, data['service_id'])
         if not service:
             return {"error": "Service not found"}, 404
         integration = Integration(
@@ -807,7 +732,9 @@ class ServiceDowntime(Resource):
     @jwt_required()
     def post(self, service_id):
         data = request.get_json()
-        service = Service.query.get_or_404(service_id)
+        service = db.session.get(Service, service_id)
+        if not service:
+            return {'error': 'Service not found'}, 404
         try:
             start_time = datetime.fromisoformat(data['start_time'])
             end_time = datetime.fromisoformat(data['end_time']) if data.get('end_time') else None
@@ -835,12 +762,14 @@ class ServiceDowntime(Resource):
 
     @jwt_required()
     def get(self, service_id):
-        service = Service.query.get_or_404(service_id)
+        service = db.session.get(Service, service_id)
+        if not service:
+            return {'error': 'Service not found'}, 404
         downtimes = Downtime.query.filter_by(service_id=service.id).order_by(Downtime.start_time.desc()).all()
         downtime_list = []
         for dt in downtimes:
             start = dt.start_time
-            end = dt.end_time or datetime.utcnow()
+            end = dt.end_time or datetime.now(dt.UTC)
             duration = end - start
             total_minutes = int(duration.total_seconds() / 60)
             downtime_list.append({
@@ -858,18 +787,31 @@ class ServiceDowntime(Resource):
         }
 
 # --- Health Check ---
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import or_
+
+from datetime import datetime, timedelta
+from sqlalchemy import or_
+
 def run_health_checks():
     with app.app_context():
         services = Service.query.all()
         status_changes = False
+        
         for service in services:
             status = service.status
             bia = service.bia
-            now = datetime.utcnow()
-            if status and status.last_updated:
-                delta = now - status.last_updated
-                old_status = status.status
-                if delta > timedelta(minutes=10):
+            now = datetime.now()  # naive datetime
+            
+            if not status:
+                status = Status(service_id=service.id, status="Unknown", last_updated=now)
+                db.session.add(status)
+                status_changes = True
+                create_alert(service, "StatusChange", f"Service {service.name} status is Unknown", "Warning")
+            else:
+                delta = now - status.last_updated if status.last_updated else None
+                
+                if delta is None or delta > timedelta(minutes=10):
                     if status.status != "Down":
                         status.status = "Down"
                         status_changes = True
@@ -885,25 +827,27 @@ def run_health_checks():
                         status.status = "Up"
                         status_changes = True
                         create_alert(service, "StatusChange", f"Service {service.name} is Up", "Info")
-            else:
-                if not status:
-                    status = Status(service_id=service.id)
-                    db.session.add(status)
-                if status.status != "Unknown":
-                    status.status = "Unknown"
-                    status_changes = True
-                    create_alert(service, "StatusChange", f"Service {service.name} status is Unknown", "Warning")
-            status.last_updated = now
+            
+            if status.last_updated is None or status_changes:
+                status.last_updated = now
+            
             all_services = Service.query.all()
             risk_result = calculate_risk_score(service, bia, status, all_services)
-            if risk_result['risk_level'] == 'High':
+            
+            if risk_result.get('risk_level') == 'High':
                 create_alert(service, "HighRisk", f"High risk score: {risk_result['risk_score']}. Reason: {risk_result['reason']}", "Critical")
-            if risk_result['is_critical']:
+            
+            if risk_result.get('is_critical'):
                 create_alert(service, "Critical", f"Service {service.name} is critical: {risk_result['reason']}", "Critical")
+            
             if bia and (bia.rto or bia.rpo):
                 downtimes = Downtime.query.filter_by(service_id=service.id).filter(
-                    Downtime.end_time.is_(None) | (Downtime.end_time > now - timedelta(hours=24))
+                    or_(
+                        Downtime.end_time.is_(None),
+                        Downtime.end_time > now - timedelta(hours=24)
+                    )
                 ).all()
+                
                 for downtime in downtimes:
                     downtime_duration = ((downtime.end_time or now) - downtime.start_time).total_seconds() / 60
                     if bia.rto and downtime_duration > bia.rto:
@@ -926,8 +870,9 @@ def run_health_checks():
                             downtime.end_time,
                             f"Downtime exceeded RPO of {bia.rpo} minutes"
                         )
-        if status_changes:
-            db.session.commit()
+        
+        db.session.commit()
+
 
 def create_alert(service, alert_type, message, severity):
     alert = Alert(
@@ -987,16 +932,22 @@ def send_alert(service):
 class ServiceHealth(Resource):
     @jwt_required()
     def get(self, service_id):
-        with app.app_context():
-            run_health_checks()
-        service = Service.query.get_or_404(service_id)
+        # Just call run_health_checks() directly; it has its own app_context
+        run_health_checks()
+        
+        service = db.session.get(Service, service_id)
+        if not service:
+            return {'error': 'Service not found'}, 404
+        
         bia = service.bia
         status = service.status
         latest_downtime = Downtime.query.filter_by(service_id=service_id).order_by(Downtime.start_time.desc()).first()
         all_services = Service.query.all()
+        
         current_status = status.status if status else "Unknown"
         risk_result = calculate_risk_score(service, bia, status, all_services)
         overall_health, reason = determine_overall_health(current_status, risk_result)
+        
         health_info = {
             "service_id": service.id,
             "name": service.name,
@@ -1012,8 +963,8 @@ class ServiceHealth(Resource):
                 "reason": latest_downtime.reason if latest_downtime else None
             },
             "overall_health": overall_health,
-            "risk_score": risk_result['risk_score'],
-            "is_critical": risk_result['is_critical'],
+            "risk_score": risk_result.get('risk_score'),
+            "is_critical": risk_result.get('is_critical'),
             "reason": reason,
             "uptime_percentage": calculate_uptime_percentage(service)
         }
@@ -1037,12 +988,22 @@ def determine_overall_health(current_status, risk_result):
     return health_status, ', '.join(reasons) if reasons else "No issues detected"
 
 def calculate_uptime_percentage(service):
-    total_time = datetime.utcnow() - service.status.last_updated if service.status and service.status.last_updated else timedelta(seconds=1)
+    if not service.status or not service.status.last_updated:
+        return 100.0  # No status or uptime data, assume fully up
+    now = datetime.utcnow()  # Returns naive UTC datetime
+    total_time = now - service.status.last_updated
+    if total_time.total_seconds() <= 0:
+        return 100.0  # Avoid negative or zero total_time
     downtime = Downtime.query.filter_by(service_id=service.id).all()
-    downtime_duration = sum([(d.end_time or datetime.utcnow()) - d.start_time for d in downtime], timedelta())
+    downtime_duration = sum(
+        [(d.end_time or now) - d.start_time for d in downtime],
+        timedelta()
+    )
     uptime_duration = total_time - downtime_duration
-    uptime_percentage = (uptime_duration / total_time) * 100 if total_time else 100
-    return round(uptime_percentage, 2)
+    if uptime_duration.total_seconds() < 0:
+        uptime_duration = timedelta(seconds=0)  # Prevent negative uptime
+    uptime_percentage = (uptime_duration.total_seconds() / total_time.total_seconds()) * 100
+    return max(0.0, min(100.0, round(uptime_percentage, 2)))
 
 # --- Alert Routes ---
 @alert_ns.route('')
@@ -1065,7 +1026,9 @@ class AlertList(Resource):
     @alert_ns.expect(alert_model)
     def put(self):
         data = alert_ns.payload
-        alert = Alert.query.get_or_404(data['id'])
+        alert = db.session.get(Alert, data['id'])
+        if not alert:
+            return {'error': 'Alert not found'}, 404
         alert.acknowledged = data.get('acknowledged', alert.acknowledged)
         db.session.commit()
         log_audit("Alert Acknowledged", "Alert", alert.service_id, get_jwt_identity())
@@ -1098,4 +1061,4 @@ with app.app_context():
     db.create_all()
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001, ssl_context='adhoc')
+    app.run(debug=True, port=5002, ssl_context='adhoc')
