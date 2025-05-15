@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Box,
@@ -20,12 +20,26 @@ import {
   Select,
   InputLabel,
   FormControl,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
+import HealthAndSafetyIcon from "@mui/icons-material/HealthAndSafety";
+import CheckCircle from "@mui/icons-material/CheckCircle";
+import Warning from "@mui/icons-material/Warning";
+import Error from "@mui/icons-material/Error";
 import axios from "axios";
 import jwt_decode from "jwt-decode";
+import * as d3 from "d3";
 import BASE_URL from "../ApiConfig/apiConfig";
 
 const ServiceDetail = () => {
@@ -44,6 +58,9 @@ const ServiceDetail = () => {
   const [openDowntimeDialog, setOpenDowntimeDialog] = useState(false);
   const [openRiskDialog, setOpenRiskDialog] = useState(false);
   const [openIntegrationDialog, setOpenIntegrationDialog] = useState(false);
+  const [openHealthDialog, setOpenHealthDialog] = useState(false);
+  const [healthInfo, setHealthInfo] = useState(null);
+  const [healthError, setHealthError] = useState(null);
   const [serviceForm, setServiceForm] = useState({
     id: "",
     name: "",
@@ -74,6 +91,13 @@ const ServiceDetail = () => {
     config: "",
   });
   const [allServices, setAllServices] = useState([]);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+  const graphRef = useRef(null);
+  const downtimeGraphRef = useRef(null);
 
   // Fetch all services for dependency dropdown
   const fetchAllServices = async () => {
@@ -85,6 +109,11 @@ const ServiceDetail = () => {
       setAllServices(response.data.filter((svc) => svc.id !== Number(id)));
     } catch (error) {
       console.error("Error fetching all services:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to fetch services",
+        severity: "error",
+      });
     }
   };
 
@@ -129,6 +158,11 @@ const ServiceDetail = () => {
       }
     } catch (error) {
       console.error("Error fetching service details:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to fetch service details",
+        severity: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -149,6 +183,11 @@ const ServiceDetail = () => {
       });
     } catch (error) {
       console.error("Error fetching risk details:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to fetch risk details",
+        severity: "error",
+      });
     }
   };
 
@@ -162,6 +201,11 @@ const ServiceDetail = () => {
       setDowntime(response.data.downtimes);
     } catch (error) {
       console.error("Error fetching downtime details:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to fetch downtime details",
+        severity: "error",
+      });
     }
   };
 
@@ -178,6 +222,11 @@ const ServiceDetail = () => {
       setDependencies(serviceDependencies ? serviceDependencies.dependencies : []);
     } catch (error) {
       console.error("Error fetching dependencies:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to fetch dependencies",
+        severity: "error",
+      });
     }
   };
 
@@ -191,6 +240,29 @@ const ServiceDetail = () => {
       setIntegrations(response.data.filter((int) => int.service_id === Number(id)));
     } catch (error) {
       console.error("Error fetching integrations:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to fetch integrations",
+        severity: "error",
+      });
+    }
+  };
+
+  // Fetch health check
+  const handleHealthCheck = async () => {
+    try {
+      const token = sessionStorage.getItem("accessToken");
+      const response = await axios.get(`${BASE_URL}/services/${id}/health`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setHealthInfo(response.data);
+      setHealthError(null);
+      setOpenHealthDialog(true);
+    } catch (error) {
+      console.error("Error fetching health check:", error);
+      setHealthError("Failed to fetch health status. Please try again.");
+      setHealthInfo(null);
+      setOpenHealthDialog(true);
     }
   };
 
@@ -203,6 +275,11 @@ const ServiceDetail = () => {
         setUserRole(decoded.role);
       } catch (error) {
         console.error("Error decoding JWT token:", error);
+        setSnackbar({
+          open: true,
+          message: "Failed to decode user role",
+          severity: "error",
+        });
       }
     }
   };
@@ -250,6 +327,11 @@ const ServiceDetail = () => {
     setBiaForm((prev) => ({ ...prev, dependencies: value }));
   };
 
+  // Handle Snackbar close
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
   // Handle service update submission
   const handleServiceUpdate = async () => {
     try {
@@ -259,10 +341,18 @@ const ServiceDetail = () => {
       });
       setOpenServiceDialog(false);
       fetchServiceDetail();
-      alert("Service updated successfully");
+      setSnackbar({
+        open: true,
+        message: "Service updated successfully",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error updating service:", error);
-      alert("Failed to update service");
+      setSnackbar({
+        open: true,
+        message: "Failed to update service",
+        severity: "error",
+      });
     }
   };
 
@@ -275,10 +365,18 @@ const ServiceDetail = () => {
       });
       setOpenBiaDialog(false);
       fetchServiceDetail();
-      alert("BIA updated successfully");
+      setSnackbar({
+        open: true,
+        message: "BIA updated successfully",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error updating BIA:", error);
-      alert("Failed to update BIA");
+      setSnackbar({
+        open: true,
+        message: "Failed to update BIA",
+        severity: "error",
+      });
     }
   };
 
@@ -291,10 +389,18 @@ const ServiceDetail = () => {
       });
       setOpenStatusDialog(false);
       fetchServiceDetail();
-      alert("Status updated successfully");
+      setSnackbar({
+        open: true,
+        message: "Status updated successfully",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error updating status:", error);
-      alert("Failed to update status");
+      setSnackbar({
+        open: true,
+        message: "Failed to update status",
+        severity: "error",
+      });
     }
   };
 
@@ -313,10 +419,18 @@ const ServiceDetail = () => {
       setOpenDowntimeDialog(false);
       setDowntimeForm({ start_time: "", end_time: "", reason: "" });
       fetchDowntimeDetails(id);
-      alert("Downtime logged successfully");
+      setSnackbar({
+        open: true,
+        message: "Downtime logged successfully",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error logging downtime:", error);
-      alert("Failed to log downtime");
+      setSnackbar({
+        open: true,
+        message: "Failed to log downtime",
+        severity: "error",
+      });
     }
   };
 
@@ -329,10 +443,18 @@ const ServiceDetail = () => {
       });
       setOpenRiskDialog(false);
       fetchRiskDetails(id);
-      alert("Automated risk score saved successfully");
+      setSnackbar({
+        open: true,
+        message: "Automated risk score saved successfully",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error saving automated risk:", error);
-      alert("Failed to save automated risk");
+      setSnackbar({
+        open: true,
+        message: "Failed to save automated risk",
+        severity: "error",
+      });
     }
   };
 
@@ -350,22 +472,33 @@ const ServiceDetail = () => {
       });
       setOpenRiskDialog(false);
       fetchRiskDetails(id);
-      alert("Risk score updated successfully");
+      setSnackbar({
+        open: true,
+        message: "Risk score updated successfully",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error updating risk:", error);
-      alert("Failed to update risk");
+      setSnackbar({
+        open: true,
+        message: "Failed to update risk",
+        severity: "error",
+      });
     }
   };
 
   // Handle integration submission
   const handleIntegrationSubmit = async () => {
     try {
-      // Validate config as JSON
       let configObj;
       try {
         configObj = JSON.parse(integrationForm.config);
       } catch (error) {
-        alert("Invalid JSON format for config. Please provide a valid JSON object.");
+        setSnackbar({
+          open: true,
+          message: "Invalid JSON format for config. Please provide a valid JSON object.",
+          severity: "error",
+        });
         return;
       }
 
@@ -373,7 +506,7 @@ const ServiceDetail = () => {
       const payload = {
         service_id: parseInt(id),
         type: integrationForm.type,
-        config: configObj, // Send parsed JSON object
+        config: configObj,
       };
       await axios.post(`${BASE_URL}/services/integrations`, payload, {
         headers: { Authorization: `Bearer ${token}` },
@@ -381,12 +514,248 @@ const ServiceDetail = () => {
       setOpenIntegrationDialog(false);
       setIntegrationForm({ service_id: id, type: "", config: "" });
       fetchIntegrations();
-      alert("Integration added successfully");
+      setSnackbar({
+        open: true,
+        message: "Integration added successfully",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error adding integration:", error);
-      alert("Failed to add integration");
+      setSnackbar({
+        open: true,
+        message: "Failed to add integration",
+        severity: "error",
+      });
     }
   };
+
+  // D3 Force-Directed Graph for Dependencies (Engineer)
+  useEffect(() => {
+    if (userRole !== "Engineer" || !service || !graphRef.current) return;
+
+    // Clear previous SVG
+    d3.select(graphRef.current).selectAll("*").remove();
+
+    // Prepare data
+    const nodes = [
+      { id: `service_${service.id}`, name: service.name, type: "current" },
+      ...dependencies.map((dep) => ({
+        id: `dep_${dep.service_id}`,
+        name: dep.service_name,
+        type: "dependency",
+        criticality: dep.criticality || "N/A",
+        impact: dep.impact || "N/A",
+        rto: dep.rto || "N/A",
+        rpo: dep.rpo || "N/A",
+        status: dep.status || "N/A",
+      })),
+    ];
+    const links = dependencies.map((dep) => ({
+      source: `service_${service.id}`,
+      target: `dep_${dep.service_id}`,
+    }));
+
+    // Set up SVG
+    const width = 600;
+    const height = 400;
+    const svg = d3
+      .select(graphRef.current)
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height)
+      .attr("viewBox", `0 0 ${width} ${height}`);
+
+    // Create simulation
+    const simulation = d3
+      .forceSimulation(nodes)
+      .force(
+        "link",
+        d3
+          .forceLink(links)
+          .id((d) => d.id)
+          .distance(100)
+      )
+      .force("charge", d3.forceManyBody().strength(-200))
+      .force("center", d3.forceCenter(width / 2, height / 2));
+
+    // Draw links
+    const link = svg
+      .append("g")
+      .attr("stroke", "#999")
+      .attr("stroke-opacity", 0.6)
+      .selectAll("line")
+      .data(links)
+      .join("line");
+
+    // Draw nodes
+    const node = svg
+      .append("g")
+      .selectAll("g")
+      .data(nodes)
+      .join("g")
+      .call(
+        d3
+          .drag()
+          .on("start", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+          })
+          .on("drag", (event, d) => {
+            d.fx = event.x;
+            d.fy = event.y;
+          })
+          .on("end", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+          })
+      );
+
+    // Add circles
+    node
+      .append("circle")
+      .attr("r", 10)
+      .attr("fill", (d) => (d.type === "current" ? "#006E74" : "#4caf50"));
+
+    // Add labels
+    node
+      .append("text")
+      .attr("dx", 12)
+      .attr("dy", ".35em")
+      .text((d) => d.name)
+      .attr("fill", "#000")
+      .attr("font-size", "12px");
+
+    // Add tooltips
+    node
+      .append("title")
+      .text(
+        (d) =>
+          d.type === "current"
+            ? `Name: ${d.name}`
+            : `Name: ${d.name}\nID: ${
+                d.id.split("_")[1]
+              }\nCriticality: ${d.criticality}\nImpact: ${d.impact}\nRTO: ${d.rto}\nRPO: ${d.rpo}\nStatus: ${d.status}`
+      );
+
+    // Update positions
+    simulation.on("tick", () => {
+      link
+        .attr("x1", (d) => d.source.x)
+        .attr("y1", (d) => d.source.y)
+        .attr("x2", (d) => d.target.x)
+        .attr("y2", (d) => d.target.y);
+
+      node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    });
+
+    // Cleanup
+    return () => {
+      simulation.stop();
+    };
+  }, [userRole, service, dependencies]);
+
+  // D3 Horizontal Bar Chart for Downtime (Ops Analyst)
+  useEffect(() => {
+    if (userRole !== "Ops Analyst" || !service || !downtimeGraphRef.current || downtime.length === 0) return;
+
+    // Clear previous SVG
+    d3.select(downtimeGraphRef.current).selectAll("*").remove();
+
+    // Prepare data
+    const data = downtime.map((dt, index) => ({
+      index,
+      start_time: new Date(dt.start_time),
+      end_time: dt.end_time ? new Date(dt.end_time) : null,
+      reason: dt.reason || "Not specified",
+      duration: dt.duration || "N/A",
+      total_minutes: dt.total_minutes || 0,
+      isOngoing: !dt.end_time,
+    }));
+
+    // Set up SVG
+    const margin = { top: 20, right: 20, bottom: 50, left: 150 };
+    const width = 600 - margin.left - margin.right;
+    const height = Math.max(100, downtime.length * 40) - margin.top - margin.bottom;
+
+    const svg = d3
+      .select(downtimeGraphRef.current)
+      .append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Set up scales
+    const x = d3
+      .scaleLinear()
+      .domain([0, d3.max(data, (d) => d.total_minutes) || 100])
+      .range([0, width]);
+
+    const y = d3
+      .scaleBand()
+      .domain(data.map((d) => d.index))
+      .range([0, height])
+      .padding(0.2);
+
+    // Add axes
+    svg
+      .append("g")
+      .attr("transform", `translate(0,${height})`)
+      .call(d3.axisBottom(x).ticks(5))
+      .append("text")
+      .attr("x", width / 2)
+      .attr("y", 40)
+      .attr("fill", "#000")
+      .attr("text-anchor", "middle")
+      .text("Total Minutes");
+
+    svg
+      .append("g")
+      .call(d3.axisLeft(y).tickFormat((d) => {
+        const reason = data[d].reason;
+        return reason.length > 20 ? `${reason.slice(0, 17)}...` : reason;
+      }))
+      .selectAll("text")
+      .style("text-anchor", "end");
+
+    // Add bars
+    svg
+      .selectAll(".bar")
+      .data(data)
+      .enter()
+      .append("rect")
+      .attr("class", "bar")
+      .attr("x", 0)
+      .attr("y", (d) => y(d.index))
+      .attr("width", (d) => x(d.total_minutes))
+      .attr("height", y.bandwidth())
+      .attr("fill", (d) => (d.isOngoing ? "#d32f2f" : "#757575"))
+      .append("title")
+      .text(
+        (d) =>
+          `Start Time: ${d.start_time.toLocaleString()}\nEnd Time: ${
+            d.isOngoing ? "Ongoing" : d.end_time?.toLocaleString() || "N/A"
+          }\nReason: ${d.reason}\nDuration: ${d.duration}\nTotal Minutes: ${d.total_minutes}`
+      );
+
+    // Add gridlines
+    svg
+      .append("g")
+      .attr("class", "grid")
+      .attr("transform", `translate(0,${height})`)
+      .call(
+        d3
+          .axisBottom(x)
+          .ticks(5)
+          .tickSize(-height)
+          .tickFormat(() => "")
+      )
+      .selectAll(".tick line")
+      .attr("stroke", "#e0e0e0")
+      .attr("stroke-opacity", 0.5);
+  }, [userRole, service, downtime]);
 
   useEffect(() => {
     fetchUserRole();
@@ -415,23 +784,119 @@ const ServiceDetail = () => {
         <Typography variant="h6" color="error">
           Service not found
         </Typography>
-        <Button onClick={() => navigate("/db4")} variant="outlined">
+        <Button
+          onClick={() => navigate("/db4")}
+          sx={{ color: "#1976d2", borderColor: "#1976d2" }}
+        >
           Go Back
         </Button>
       </Box>
     );
   }
 
+  // Determine health icon and color
+  const getHealthIcon = (health) => {
+    switch (health) {
+      case "Healthy":
+        return <CheckCircle sx={{ color: "#4caf50", verticalAlign: "middle", mr: 1 }} />;
+      case "Degraded":
+        return <Warning sx={{ color: "#ff9800", verticalAlign: "middle", mr: 1 }} />;
+      case "Unhealthy":
+        return <Error sx={{ color: "#d32f2f", verticalAlign: "middle", mr: 1 }} />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <Box p={4} width="100%" sx={{ textAlign: "left" }}>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate("/db4")}
-        variant="outlined"
-        sx={{ mb: 3 }}
-      >
-        Back to Dashboard
-      </Button>
+      <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/db4")}
+          sx={{ color: "#1976d2", borderColor: "#1976d2" }}
+        >
+          Back to Dashboard
+        </Button>
+        <Button
+          startIcon={<HealthAndSafetyIcon />}
+          onClick={handleHealthCheck}
+          variant="outlined"
+          sx={{ color: "#006E74", borderColor: "#006E74" }}
+        >
+          Health Check
+        </Button>
+      </Box>
+
+      {/* Health Check Dialog */}
+      <Dialog open={openHealthDialog} onClose={() => setOpenHealthDialog(false)}>
+        <DialogTitle>Service Health Status</DialogTitle>
+        <DialogContent>
+          {healthError ? (
+            <Typography variant="body1" color="error">
+              {healthError}
+            </Typography>
+          ) : healthInfo ? (
+            <>
+              <Box display="flex" alignItems="center" mb={2}>
+                {getHealthIcon(healthInfo.overall_health)}
+                <Typography variant="h6">
+                  Overall Health: {healthInfo.overall_health}
+                </Typography>
+              </Box>
+              <Typography variant="body1" gutterBottom>
+                <strong>Service Name:</strong> {healthInfo.name}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>Status:</strong> {healthInfo.status}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>Risk Score:</strong> {healthInfo.risk_score}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>Is Critical:</strong> {healthInfo.is_critical ? "Yes" : "No"}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>Reason:</strong> {healthInfo.reason || "N/A"}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>Uptime Percentage:</strong> {healthInfo.uptime_percentage.toFixed(2)}%
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>Criticality:</strong> {healthInfo.bia.criticality || "N/A"}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>RTO:</strong> {healthInfo.bia.rto || "N/A"}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>RPO:</strong> {healthInfo.bia.rpo || "N/A"}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>Latest Downtime:</strong>{" "}
+                {healthInfo.downtime.start_time
+                  ? `${new Date(healthInfo.downtime.start_time).toLocaleString()} (${healthInfo.downtime.reason || "N/A"})`
+                  : "None"}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>Last Updated:</strong>{" "}
+                {healthInfo.last_updated
+                  ? new Date(healthInfo.last_updated).toLocaleString()
+                  : "N/A"}
+              </Typography>
+            </>
+          ) : (
+            <Typography variant="body1">Loading health information...</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setOpenHealthDialog(false)}
+            sx={{ color: "#1976d2" }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Business Owner Rendering */}
       {userRole === "Business Owner" && service && (
@@ -440,7 +905,7 @@ const ServiceDetail = () => {
             {service.name}
           </Typography>
 
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center">
                 <Typography variant="h6" gutterBottom>
@@ -448,7 +913,7 @@ const ServiceDetail = () => {
                 </Typography>
                 <IconButton
                   onClick={() => setOpenServiceDialog(true)}
-                  color="primary"
+                  sx={{ color: "#006E74" }}
                 >
                   <EditIcon />
                 </IconButton>
@@ -468,7 +933,7 @@ const ServiceDetail = () => {
                 </Typography>
                 <IconButton
                   onClick={() => setOpenStatusDialog(true)}
-                  color="primary"
+                  sx={{ color: "#006E74" }}
                   size="small"
                 >
                   <EditIcon fontSize="small" />
@@ -482,7 +947,7 @@ const ServiceDetail = () => {
 
           <Divider sx={{ my: 3 }} />
 
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center">
                 <Typography variant="h6" gutterBottom>
@@ -490,7 +955,7 @@ const ServiceDetail = () => {
                 </Typography>
                 <IconButton
                   onClick={() => setOpenBiaDialog(true)}
-                  color="primary"
+                  sx={{ color: "#006E74" }}
                 >
                   <EditIcon />
                 </IconButton>
@@ -518,7 +983,7 @@ const ServiceDetail = () => {
 
           <Divider sx={{ my: 3 }} />
 
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Risk Level
@@ -558,8 +1023,17 @@ const ServiceDetail = () => {
               />
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setOpenServiceDialog(false)}>Cancel</Button>
-              <Button onClick={handleServiceUpdate} variant="contained">
+              <Button
+                onClick={() => setOpenServiceDialog(false)}
+                sx={{ color: "#e0e0e0" }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleServiceUpdate}
+                sx={{ bgcolor: "#006E74", "&:hover": { bgcolor: "#005a60" } }}
+                variant="contained"
+              >
                 Update
               </Button>
             </DialogActions>
@@ -635,8 +1109,17 @@ const ServiceDetail = () => {
               />
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setOpenBiaDialog(false)}>Cancel</Button>
-              <Button onClick={handleBiaUpdate} variant="contained">
+              <Button
+                onClick={() => setOpenBiaDialog(false)}
+                sx={{ color: "#e0e0e0" }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBiaUpdate}
+                sx={{ bgcolor: "#006E74", "&:hover": { bgcolor: "#005a60" } }}
+                variant="contained"
+              >
                 Update
               </Button>
             </DialogActions>
@@ -657,8 +1140,17 @@ const ServiceDetail = () => {
               />
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setOpenStatusDialog(false)}>Cancel</Button>
-              <Button onClick={handleStatusUpdate} variant="contained">
+              <Button
+                onClick={() => setOpenStatusDialog(false)}
+                sx={{ color: "#e0e0e0" }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleStatusUpdate}
+                sx={{ bgcolor: "#006E74", "&:hover": { bgcolor: "#005a60" } }}
+                variant="contained"
+              >
                 Update
               </Button>
             </DialogActions>
@@ -672,7 +1164,7 @@ const ServiceDetail = () => {
           <Typography variant="h4" fontWeight="bold" gutterBottom>
             {service.name}
           </Typography>
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Service Information
@@ -695,7 +1187,7 @@ const ServiceDetail = () => {
             </CardContent>
           </Card>
           <Divider sx={{ my: 3 }} />
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center">
                 <Typography variant="h6" gutterBottom>
@@ -703,7 +1195,7 @@ const ServiceDetail = () => {
                 </Typography>
                 <IconButton
                   onClick={() => setOpenRiskDialog(true)}
-                  color="primary"
+                  sx={{ color: "#006E74" }}
                 >
                   <EditIcon />
                 </IconButton>
@@ -735,7 +1227,7 @@ const ServiceDetail = () => {
             </CardContent>
           </Card>
           <Divider sx={{ my: 3 }} />
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center">
                 <Typography variant="h6" gutterBottom>
@@ -743,31 +1235,49 @@ const ServiceDetail = () => {
                 </Typography>
                 <IconButton
                   onClick={() => setOpenDowntimeDialog(true)}
-                  color="primary"
+                  sx={{ color: "#006E74" }}
                 >
                   <EditIcon />
                 </IconButton>
               </Box>
               {downtime.every((dt) => Object.keys(dt).length !== 0) && downtime.length > 0 ? (
-                downtime.map((dt, index) => (
-                  <Box key={index} sx={{ mb: 2 }}>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Start Time:</strong> {new Date(dt.start_time).toLocaleString()}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>End Time:</strong> {dt.end_time ? new Date(dt.end_time).toLocaleString() : "Ongoing"}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Reason:</strong> {dt.reason}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Duration:</strong> {dt.duration}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Total Minutes:</strong> {dt.total_minutes}
-                    </Typography>
-                  </Box>
-                ))
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell><strong>Start Time</strong></TableCell>
+                        <TableCell><strong>End Time</strong></TableCell>
+                        <TableCell><strong>Reason</strong></TableCell>
+                        <TableCell><strong>Duration</strong></TableCell>
+                        <TableCell><strong>Total Minutes</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {downtime.map((dt, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{new Date(dt.start_time).toLocaleString()}</TableCell>
+                          <TableCell>{dt.end_time ? new Date(dt.end_time).toLocaleString() : "Ongoing"}</TableCell>
+                          <TableCell>{dt.reason}</TableCell>
+                          <TableCell>{dt.duration}</TableCell>
+                          <TableCell>{dt.total_minutes}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Typography variant="body1">No downtime details available.</Typography>
+              )}
+            </CardContent>
+          </Card>
+          <Divider sx={{ my: 3 }} />
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Downtime Visualization
+              </Typography>
+              {downtime.every((dt) => Object.keys(dt).length !== 0) && downtime.length > 0 ? (
+                <Box ref={downtimeGraphRef} sx={{ width: "100%", height: Math.max(100, downtime.length * 40) }} />
               ) : (
                 <Typography variant="body1">No downtime details available.</Typography>
               )}
@@ -809,8 +1319,17 @@ const ServiceDetail = () => {
               />
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setOpenDowntimeDialog(false)}>Cancel</Button>
-              <Button onClick={handleDowntimeSubmit} variant="contained">
+              <Button
+                onClick={() => setOpenDowntimeDialog(false)}
+                sx={{ color: "#e0e0e0" }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDowntimeSubmit}
+                sx={{ bgcolor: "#006E74", "&:hover": { bgcolor: "#005a60" } }}
+                variant="contained"
+              >
                 Log Downtime
               </Button>
             </DialogActions>
@@ -824,7 +1343,7 @@ const ServiceDetail = () => {
                 <Button
                   onClick={handleAutomatedRiskSubmit}
                   variant="contained"
-                  color="primary"
+                  sx={{ bgcolor: "#006E74", "&:hover": { bgcolor: "#005a60" } }}
                   fullWidth
                 >
                   Calculate and Save Automated Risk
@@ -872,9 +1391,18 @@ const ServiceDetail = () => {
               )}
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setOpenRiskDialog(false)}>Cancel</Button>
+              <Button
+                onClick={() => setOpenRiskDialog(false)}
+                sx={{ color: "#e0e0e0" }}
+              >
+                Cancel
+              </Button>
               {risk && (
-                <Button onClick={handleManualRiskUpdate} variant="contained">
+                <Button
+                  onClick={handleManualRiskUpdate}
+                  sx={{ bgcolor: "#006E74", "&:hover": { bgcolor: "#005a60" } }}
+                  variant="contained"
+                >
                   Update Risk
                 </Button>
               )}
@@ -889,7 +1417,7 @@ const ServiceDetail = () => {
           <Typography variant="h4" fontWeight="bold" gutterBottom>
             {service.name}
           </Typography>
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Service Information
@@ -912,44 +1440,60 @@ const ServiceDetail = () => {
             </CardContent>
           </Card>
           <Divider sx={{ my: 3 }} />
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Dependent Services
               </Typography>
               {dependencies.length > 0 ? (
-                dependencies.map((dep, index) => (
-                  <Box key={index} sx={{ mb: 2 }}>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Service Name:</strong> {dep.service_name}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Service ID:</strong> {dep.service_id}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Criticality:</strong> {dep.criticality || "N/A"}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Impact:</strong> {dep.impact || "N/A"}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>RTO:</strong> {dep.rto || "N/A"}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>RPO:</strong> {dep.rpo || "N/A"}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Status:</strong> {dep.status || "N/A"}
-                    </Typography>
-                  </Box>
-                ))
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell><strong>Name</strong></TableCell>
+                        <TableCell><strong>ID</strong></TableCell>
+                        <TableCell><strong>Criticality</strong></TableCell>
+                        <TableCell><strong>Impact</strong></TableCell>
+                        <TableCell><strong>RTO</strong></TableCell>
+                        <TableCell><strong>RPO</strong></TableCell>
+                        <TableCell><strong>Status</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {dependencies.map((dep, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{dep.service_name}</TableCell>
+                          <TableCell>{dep.service_id}</TableCell>
+                          <TableCell>{dep.criticality || "N/A"}</TableCell>
+                          <TableCell>{dep.impact || "N/A"}</TableCell>
+                          <TableCell>{dep.rto || "N/A"}</TableCell>
+                          <TableCell>{dep.rpo || "N/A"}</TableCell>
+                          <TableCell>{dep.status || "N/A"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               ) : (
                 <Typography variant="body1">No dependent services available.</Typography>
               )}
             </CardContent>
           </Card>
           <Divider sx={{ my: 3 }} />
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Dependency Graph
+              </Typography>
+              {dependencies.length > 0 ? (
+                <Box ref={graphRef} sx={{ width: "100%", height: 400 }} />
+              ) : (
+                <Typography variant="body1">No dependent services available.</Typography>
+              )}
+            </CardContent>
+          </Card>
+          <Divider sx={{ my: 3 }} />
+          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: 2, borderColor: "#e0e0e0" }}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center">
                 <Typography variant="h6" gutterBottom>
@@ -957,7 +1501,7 @@ const ServiceDetail = () => {
                 </Typography>
                 <IconButton
                   onClick={() => setOpenIntegrationDialog(true)}
-                  color="primary"
+                  sx={{ color: "#006E74" }}
                 >
                   <AddCircleIcon />
                 </IconButton>
@@ -1021,14 +1565,39 @@ const ServiceDetail = () => {
               />
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setOpenIntegrationDialog(false)}>Cancel</Button>
-              <Button onClick={handleIntegrationSubmit} variant="contained">
+              <Button
+                onClick={() => setOpenIntegrationDialog(false)}
+                sx={{ color: "#e0e0e0" }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleIntegrationSubmit}
+                sx={{ bgcolor: "#006E74", "&:hover": { bgcolor: "#005a60" } }}
+                variant="contained"
+              >
                 Add Integration
               </Button>
             </DialogActions>
           </Dialog>
         </>
       )}
+
+      {/* Snackbar for Alerts */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          onClose={handleSnackbarClose}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

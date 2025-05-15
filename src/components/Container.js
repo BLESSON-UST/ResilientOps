@@ -23,6 +23,7 @@ import { Navigate } from "react-router-dom";
 import DragAndDrop from "./Temp";
 import Home from "./Home";
 import ServiceDetail from "./ProcessDetails";
+import Logs from "./Logs";
 
 
 // Importing Divider from MUI
@@ -114,6 +115,7 @@ const Container = () => {
                 <Route path="/new" element={<NewProcessPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/service/:id/view" element={<ProcessDetails />} />
+                <Route path="/logs" element={<Logs/>}/>
                 
                 <Route path="temp" element={<DragAndDrop />} />
               </Routes>

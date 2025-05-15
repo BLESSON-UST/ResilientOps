@@ -8,26 +8,25 @@ import {
   Divider,
   Collapse,
 } from "@mui/material";
-import { Home, Dashboard, ExpandLess, ExpandMore } from "@mui/icons-material";
-import { Link, useLocation } from "react-router-dom"; // Import useLocation hook for detecting the active route
+import { Home, Dashboard, ExpandLess, ExpandMore, HistoryOutlined } from "@mui/icons-material";
+import { Link, useLocation } from "react-router-dom";
 import SidebarFooterAccount from "./SidebarFooterAccount";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 
 const Sidebar = ({ collapsed }) => {
-  const location = useLocation(); // Get the current location (active route)
-  const [openDropdown, setOpenDropdown] = useState(false); // State for dropdown menu
+  const location = useLocation();
+  const [openDropdown, setOpenDropdown] = useState(false);
 
   const handleDropdownToggle = () => {
-    setOpenDropdown(!openDropdown); // Toggle dropdown menu
+    setOpenDropdown(!openDropdown);
   };
 
   return (
     <Box sx={{ display: "flex" }}>
-      {/* Sidebar */}
       <Box
         sx={{
-          width: collapsed ? 80 : 250, // Change width based on collapse state
+          width: collapsed ? 80 : 250,
           backgroundColor: "#f5f5f5",
           display: "flex",
           flexDirection: "column",
@@ -35,13 +34,11 @@ const Sidebar = ({ collapsed }) => {
           p: 2,
           position: "sticky",
           top: 0,
-          transition: "width 0.3s", // Smooth transition for width change
-          paddingTop: "40px", // To avoid overlap with the fixed button
+          transition: "width 0.3s",
+          paddingTop: "40px",
         }}
       >
-        {/* Sidebar List */}
         <List>
-
           <ListItem
             button
             component={Link}
@@ -71,38 +68,34 @@ const Sidebar = ({ collapsed }) => {
           </ListItem>
 
           <ListItem
-  button
-  component={Link}
-  to="/settings"
-  sx={{
-    "&:hover": {
-      backgroundColor: "rgba(0, 0, 0, 0.08)",
-      borderRadius: "12px",
-    },
-    transition: "all 0.3s ease",
-    backgroundColor:
-      location.pathname === "/settings"
-        ? "rgba(173, 216, 230, 0.3)"
-        : "transparent",
-    borderRadius: location.pathname === "/settings" ? "12px" : "0px",
-  }}
->
-  <ListItemIcon
-    sx={{
-      color: location.pathname === "/settings" ? "#1E90FF" : "#808080",
-      minWidth: "35px",
-    }}
-  >
-    <SettingsOutlinedIcon />
-  </ListItemIcon>
-  {!collapsed && <ListItemText primary="Settings" />}
-</ListItem>
-
-
-
+            button
+            component={Link}
+            to="/logs"
+            sx={{
+              "&:hover": {
+                backgroundColor: "rgba(0, 0, 0, 0.08)",
+                borderRadius: "12px",
+              },
+              transition: "all 0.3s ease",
+              backgroundColor:
+                location.pathname === "/logs"
+                  ? "rgba(173, 216, 230, 0.3)"
+                  : "transparent",
+              borderRadius: location.pathname === "/logs" ? "12px" : "0px",
+            }}
+          >
+            <ListItemIcon
+              sx={{
+                color: location.pathname === "/logs" ? "#1E90FF" : "#808080",
+                minWidth: "35px",
+              }}
+            >
+              <HistoryOutlined />
+            </ListItemIcon>
+            {!collapsed && <ListItemText primary="Logs" />}
+          </ListItem>
 
         </List>
-       
         {/* <SidebarFooterAccount mini={collapsed} /> */}
       </Box>
     </Box>

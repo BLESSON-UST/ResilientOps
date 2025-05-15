@@ -118,7 +118,7 @@ const AddServiceForm = () => {
           criticality: formData.criticality || undefined,
           impact: formData.impact || undefined,
           rto: formData.rto ? parseInt(formData.rto, 10) : undefined,
-          rpo: formData.rpo ? parseInt(formData.rpo, 10) : undefined,
+          rpo: formData.rto ? parseInt(formData.rpo, 10) : undefined,
           dependencies: formData.dependencies,
           signed_off: formData.signed_off,
         },
@@ -309,7 +309,10 @@ const AddServiceForm = () => {
             <Button
               type="submit"
               variant="contained"
-              color="primary"
+              sx={{
+                bgcolor: "#006E74",
+                "&:hover": { bgcolor: "#005a60" },
+              }}
               disabled={loading}
               startIcon={loading ? <CircularProgress size={20} /> : null}
             >
@@ -317,8 +320,9 @@ const AddServiceForm = () => {
             </Button>
             <Button
               variant="outlined"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/db4")}
               disabled={loading}
+              sx={{ color: "#e0e0e0", borderColor: "#e0e0e0" }}
             >
               Cancel
             </Button>
@@ -328,6 +332,7 @@ const AddServiceForm = () => {
           open={!!error}
           autoHideDuration={6000}
           onClose={() => setError("")}
+          anchorOrigin={{ vertical: "top", horizontal: "center" }}
         >
           <Alert severity="error" onClose={() => setError("")}>
             {error}
@@ -337,6 +342,7 @@ const AddServiceForm = () => {
           open={!!success}
           autoHideDuration={6000}
           onClose={() => setSuccess("")}
+          anchorOrigin={{ vertical: "top", horizontal: "center" }}
         >
           <Alert severity="success" onClose={() => setSuccess("")}>
             {success}
