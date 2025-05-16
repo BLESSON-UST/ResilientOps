@@ -94,12 +94,12 @@ const Login = ({ isLoggedIn, setIsLoggedIn }) => {
               <h5 className="mb-5">Login to your account</h5>
               <form onSubmit={handleSubmit}>
               <div className="form-group mb-3">
-                  <label htmlFor="username">Username (Email ID)</label>
+                  <label htmlFor="username">Username </label>
                   <input
                     type="text"
                     id="username"
                     className="form-control"
-                    placeholder="Enter your corporate email-ID..."
+                    placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                   />

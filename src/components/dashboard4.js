@@ -238,7 +238,6 @@ const Dashboard = () => {
               <MenuItem value="Low">Low</MenuItem>
               <MenuItem value="Medium">Medium</MenuItem>
               <MenuItem value="High">High</MenuItem>
-              <MenuItem value="Critical">Critical</MenuItem>
             </Select>
           </FormControl>
         </Box>
@@ -246,27 +245,30 @@ const Dashboard = () => {
 
       {/* Service Cards Grid */}
       <Grid container spacing={3}>
-        {userRole === "Business Owner" && (
-          <Grid item xs={12} sm={6} md={3} display="flex" justifyContent="center">
-            <Card
-              onClick={() => navigate("/new")}
-              sx={{
-                width: 300,
-                height: 300,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                border: "2px dashed #e0e0e0",
-                borderRadius: 2,
-                transition: "background-color 0.2s",
-                "&:hover": { bgcolor: "#f5f5f5" },
-              }}
-            >
-              <AddIcon sx={{ fontSize: 60, color: "#666" }} />
-            </Card>
-          </Grid>
-        )}
+      {userRole === "Business Owner" && (
+  <Grid item xs={12} sm={6} md={3} display="flex" justifyContent="center">
+    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <Box sx={{ width: 300, height: 9, mb: 0, borderRadius: 2 }} /> {/* Empty bar for alignment */}
+      <Card
+        onClick={() => navigate("/new")}
+        sx={{
+          width: 300,
+          height: 300,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          border: "2px dashed #e0e0e0",
+          borderRadius: 2,
+          transition: "background-color 0.2s",
+          "&:hover": { bgcolor: "#f5f5f5" },
+        }}
+      >
+        <AddIcon sx={{ fontSize: 60, color: "#666" }} />
+      </Card>
+    </Box>
+  </Grid>
+)}
 
         {filteredServices.map((svc) => (
           <Grid item xs={12} sm={6} md={3} key={svc.id} display="flex" justifyContent="center">

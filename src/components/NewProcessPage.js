@@ -289,7 +289,7 @@ const AddServiceForm = () => {
               required
             >
               <MenuItem value="">Select</MenuItem>
-              <MenuItem value="Healthy">Healthy</MenuItem>
+              <MenuItem value="Healthy">Up</MenuItem>
               <MenuItem value="Degraded">Degraded</MenuItem>
               <MenuItem value="Down">Down</MenuItem>
               <MenuItem value="Unknown">Unknown</MenuItem>

@@ -408,14 +408,24 @@ const ServiceDetail = () => {
   const handleDowntimeSubmit = async () => {
     try {
       const token = sessionStorage.getItem("accessToken");
+  
+      const toISOStringIfExists = (value) => {
+        if (!value) return null;
+        const date = new Date(value);
+        return isNaN(date.getTime()) ? null : date.toISOString();
+      };
+      
       const payload = {
-        start_time: downtimeForm.start_time,
-        end_time: downtimeForm.end_time || null,
+        start_time: toISOStringIfExists(downtimeForm.start_time),
+        end_time: toISOStringIfExists(downtimeForm.end_time),
         reason: downtimeForm.reason || "Not specified",
       };
+     
+  
       await axios.post(`${BASE_URL}/services/${id}/downtime`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log(payload)
       setOpenDowntimeDialog(false);
       setDowntimeForm({ start_time: "", end_time: "", reason: "" });
       fetchDowntimeDetails(id);
@@ -433,7 +443,7 @@ const ServiceDetail = () => {
       });
     }
   };
-
+  
   // Handle automated risk submission
   const handleAutomatedRiskSubmit = async () => {
     try {
@@ -466,6 +476,7 @@ const ServiceDetail = () => {
         risk_score: parseInt(riskForm.risk_score),
         risk_level: riskForm.risk_level,
         reason: riskForm.reason || "",
+        is_critical: riskForm.risk_level === "High" // Automatically set is_critical based on risk_level
       };
       await axios.put(`${BASE_URL}/risk/${id}/manual`, payload, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1051,14 +1062,20 @@ const ServiceDetail = () => {
                 onChange={handleBiaFormChange}
                 fullWidth
               />
-              <TextField
-                margin="dense"
-                label="Impact"
-                name="impact"
-                value={biaForm.impact}
-                onChange={handleBiaFormChange}
-                fullWidth
-              />
+              <FormControl fullWidth margin="dense">
+                <InputLabel>Impact</InputLabel>
+                <Select
+                  name="impact"
+                  value={biaForm.impact}
+                  onChange={handleBiaFormChange}
+                  label="Impact"
+                >
+                  <MenuItem value="High">High</MenuItem>
+                  <MenuItem value="Severe">Severe</MenuItem>
+                  <MenuItem value="Moderate">Moderate</MenuItem>
+                  <MenuItem value="Low">Low</MenuItem>
+                </Select>
+              </FormControl>
               <TextField
                 margin="dense"
                 label="RTO (Recovery Time Objective)"
@@ -1363,16 +1380,21 @@ const ServiceDetail = () => {
                     onChange={handleRiskFormChange}
                     fullWidth
                     required
+                    inputProps={{ min: 0, max: 100 }}
                   />
-                  <TextField
-                    margin="dense"
-                    label="Risk Level"
-                    name="risk_level"
-                    value={riskForm.risk_level}
-                    onChange={handleRiskFormChange}
-                    fullWidth
-                    required
-                  />
+                  <FormControl fullWidth margin="dense">
+                    <InputLabel>Risk Level</InputLabel>
+                    <Select
+                      name="risk_level"
+                      value={riskForm.risk_level}
+                      onChange={handleRiskFormChange}
+                      label="Risk Level"
+                    >
+                      <MenuItem value="Low">Low</MenuItem>
+                      <MenuItem value="Medium">Medium</MenuItem>
+                      <MenuItem value="High">High</MenuItem>
+                    </Select>
+                  </FormControl>
                   <TextField
                     margin="dense"
                     label="Reason"

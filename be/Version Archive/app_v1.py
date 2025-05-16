@@ -17,6 +17,12 @@ from flask import request
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
 import requests
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import or_
+
+from datetime import datetime, timedelta
+from sqlalchemy import or_
+
 
 # --- ENV & Logging ---
 load_dotenv()
@@ -507,38 +513,6 @@ class ServiceList(Resource):
         log_audit("Service Updated", "Service", service.id, get_jwt_identity())
         return {'message': 'Service updated successfully'}, 200
 
-    
-    @jwt_required()
-    @role_required('Business Owner')
-    @api.doc(security='Bearer')
-    @service_ns.expect(api.model('DeleteServiceModel', {
-        'id': fields.Integer(required=True, description='ID of the service to delete')
-    }))
-    def delete(self):
-        data = request.get_json()
-        service_id = data.get('id')
-
-        if not service_id:
-            return {'message': 'id is required'}, 400
-
-        user = User.query.get(get_jwt_identity())
-        service = Service.query.get(service_id)
-
-        if not service:
-            return {'message': 'Service not found'}, 404
-
-        try:
-            log_audit("Service Deleted", "Service", service_id, user.id)
-            db.session.delete(service)  # Cascades will handle related deletions
-            db.session.commit()
-
-            return {'message': 'Service deleted successfully'}, 200
-        except Exception as e:
-            db.session.rollback()
-            return {'message': 'Error deleting service', 'error': str(e)}, 500
-
-
-
 # --- Service Status Route ---
 @service_ns.route('/<int:service_id>/status')
 class ServiceStatus(Resource):
@@ -862,14 +836,21 @@ def run_health_checks():
     with app.app_context():
         services = Service.query.all()
         status_changes = False
+        
         for service in services:
             status = service.status
             bia = service.bia
-            now = datetime.utcnow()
-            if status and status.last_updated:
-                delta = now - status.last_updated
-                old_status = status.status
-                if delta > timedelta(minutes=10):
+            now = datetime.now()  # naive datetime
+            
+            if not status:
+                status = Status(service_id=service.id, status="Unknown", last_updated=now)
+                db.session.add(status)
+                status_changes = True
+                create_alert(service, "StatusChange", f"Service {service.name} status is Unknown", "Warning")
+            else:
+                delta = now - status.last_updated if status.last_updated else None
+                
+                if delta is None or delta > timedelta(minutes=10):
                     if status.status != "Down":
                         status.status = "Down"
                         status_changes = True
@@ -885,25 +866,27 @@ def run_health_checks():
                         status.status = "Up"
                         status_changes = True
                         create_alert(service, "StatusChange", f"Service {service.name} is Up", "Info")
-            else:
-                if not status:
-                    status = Status(service_id=service.id)
-                    db.session.add(status)
-                if status.status != "Unknown":
-                    status.status = "Unknown"
-                    status_changes = True
-                    create_alert(service, "StatusChange", f"Service {service.name} status is Unknown", "Warning")
-            status.last_updated = now
+            
+            if status.last_updated is None or status_changes:
+                status.last_updated = now
+            
             all_services = Service.query.all()
             risk_result = calculate_risk_score(service, bia, status, all_services)
-            if risk_result['risk_level'] == 'High':
+            
+            if risk_result.get('risk_level') == 'High':
                 create_alert(service, "HighRisk", f"High risk score: {risk_result['risk_score']}. Reason: {risk_result['reason']}", "Critical")
-            if risk_result['is_critical']:
+            
+            if risk_result.get('is_critical'):
                 create_alert(service, "Critical", f"Service {service.name} is critical: {risk_result['reason']}", "Critical")
+            
             if bia and (bia.rto or bia.rpo):
                 downtimes = Downtime.query.filter_by(service_id=service.id).filter(
-                    Downtime.end_time.is_(None) | (Downtime.end_time > now - timedelta(hours=24))
+                    or_(
+                        Downtime.end_time.is_(None),
+                        Downtime.end_time > now - timedelta(hours=24)
+                    )
                 ).all()
+                
                 for downtime in downtimes:
                     downtime_duration = ((downtime.end_time or now) - downtime.start_time).total_seconds() / 60
                     if bia.rto and downtime_duration > bia.rto:
@@ -926,8 +909,9 @@ def run_health_checks():
                             downtime.end_time,
                             f"Downtime exceeded RPO of {bia.rpo} minutes"
                         )
-        if status_changes:
-            db.session.commit()
+        
+        db.session.commit()
+
 
 def create_alert(service, alert_type, message, severity):
     alert = Alert(
@@ -987,16 +971,22 @@ def send_alert(service):
 class ServiceHealth(Resource):
     @jwt_required()
     def get(self, service_id):
-        with app.app_context():
-            run_health_checks()
-        service = Service.query.get_or_404(service_id)
+        # Just call run_health_checks() directly; it has its own app_context
+        run_health_checks()
+        
+        service = db.session.get(Service, service_id)
+        if not service:
+            return {'error': 'Service not found'}, 404
+        
         bia = service.bia
         status = service.status
         latest_downtime = Downtime.query.filter_by(service_id=service_id).order_by(Downtime.start_time.desc()).first()
         all_services = Service.query.all()
+        
         current_status = status.status if status else "Unknown"
         risk_result = calculate_risk_score(service, bia, status, all_services)
         overall_health, reason = determine_overall_health(current_status, risk_result)
+        
         health_info = {
             "service_id": service.id,
             "name": service.name,
@@ -1012,8 +1002,8 @@ class ServiceHealth(Resource):
                 "reason": latest_downtime.reason if latest_downtime else None
             },
             "overall_health": overall_health,
-            "risk_score": risk_result['risk_score'],
-            "is_critical": risk_result['is_critical'],
+            "risk_score": risk_result.get('risk_score'),
+            "is_critical": risk_result.get('is_critical'),
             "reason": reason,
             "uptime_percentage": calculate_uptime_percentage(service)
         }
@@ -1037,12 +1027,22 @@ def determine_overall_health(current_status, risk_result):
     return health_status, ', '.join(reasons) if reasons else "No issues detected"
 
 def calculate_uptime_percentage(service):
-    total_time = datetime.utcnow() - service.status.last_updated if service.status and service.status.last_updated else timedelta(seconds=1)
+    if not service.status or not service.status.last_updated:
+        return 100.0  # No status or uptime data, assume fully up
+    now = datetime.utcnow()  # Returns naive UTC datetime
+    total_time = now - service.status.last_updated
+    if total_time.total_seconds() <= 0:
+        return 100.0  # Avoid negative or zero total_time
     downtime = Downtime.query.filter_by(service_id=service.id).all()
-    downtime_duration = sum([(d.end_time or datetime.utcnow()) - d.start_time for d in downtime], timedelta())
+    downtime_duration = sum(
+        [(d.end_time or now) - d.start_time for d in downtime],
+        timedelta()
+    )
     uptime_duration = total_time - downtime_duration
-    uptime_percentage = (uptime_duration / total_time) * 100 if total_time else 100
-    return round(uptime_percentage, 2)
+    if uptime_duration.total_seconds() < 0:
+        uptime_duration = timedelta(seconds=0)  # Prevent negative uptime
+    uptime_percentage = (uptime_duration.total_seconds() / total_time.total_seconds()) * 100
+    return max(0.0, min(100.0, round(uptime_percentage, 2)))
 
 # --- Alert Routes ---
 @alert_ns.route('')
