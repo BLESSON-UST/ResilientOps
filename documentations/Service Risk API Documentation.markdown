@@ -102,7 +102,7 @@ Stores business impact details for a service.
 Tracks the operational status of a service.
 - **id**: Integer, primary key
 - **service_id**: Integer, foreign key to Service
-- **status**: String(20), e.g., `Healthy`, `Degraded`, `Down`, `Unknown`
+- **status**: String(20), e.g., `Up`, `Degraded`, `Down`, `Unknown`
 - **last_updated**: DateTime, timestamp of last update
 
 ### Downtime
